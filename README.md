@@ -26,6 +26,7 @@ Limitations
 -----------
 * assumes little-endian arch
 * intensity stereo mode decoding is disabled (untested, might work)
+* doesn't support MPEG2 LSF extension
 
 Todo
 -----------
