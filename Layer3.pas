@@ -364,9 +364,9 @@ begin
     else begin
       abv := FInputSamples[j];
       if (abv > 0) then
-        xr1d[j] := g_gain * t_43[abv]
+        xr1d[j] := g_gain * pow_43[abv]
       else
-        xr1d[j] := -g_gain * t_43[-abv];
+        xr1d[j] := -g_gain * pow_43[-abv];
     end;
   end;
 

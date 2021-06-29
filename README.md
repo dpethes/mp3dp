@@ -1,7 +1,7 @@
 mp3dp - MP3 decoder for Pascal
 ===========
 
-Decoder for MPEG layer 3 streams, usable for Freepascal projects. 
+Decoder for MPEG layer 3 streams, usable for Freepascal projects. Compiles to about 45kB of code on x86.
 Derived from Delphi port of "maplay" version 1.2 (https://sourceforge.net/projects/delphimpeg/), which has some decoding bugs.
 Changes:
 * decoding bugfixes

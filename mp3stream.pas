@@ -2,8 +2,8 @@ unit mp3stream;
 
 interface
 uses
-  sysUtils, classes,
-  CRC, Layer3, Header, BitStream;
+  sysUtils, classes, math,
+  CRC, Layer3, Header, BitStream, L3Tables;
 
 type
   TDecodedSlice = record
@@ -41,8 +41,15 @@ implementation
 { TMP3Stream }
 
 constructor TMP3Stream.Create;
+var
+  i: Integer;
 begin
   FCRC := nil;
+  //init table for power of 4/3
+  pow_43[0] := 0;
+  for i := 1 to High(pow_43) do begin
+      pow_43[i] := Power(i, 4/3);
+  end;
 end;
 
 destructor TMP3Stream.Destroy;
