@@ -11,10 +11,13 @@ var
       data: pbyte;
       size: integer;
       stream_position: integer;
+      volume: integer;
       memstream: TMemoryStream;
   end;
 
 procedure DrawUI;
+var
+  sample_bytes: byte;
 begin
   ImGui.Begin_('MP3play');
     if ImGui.Button('Pause') then begin
@@ -24,7 +27,9 @@ begin
     if ImGui.Button('Play') then begin
         SDL_PauseAudioDevice(g_state.audio_device_id, 0);
     end;
-    ImGui.Text(format('sample %d / %d', [g_state.stream_position, g_state.size]));
+    sample_bytes := 4; //int16 size, 2 channels
+    ImGui.Text(format('sample %d / %d', [g_state.stream_position div sample_bytes, g_state.size div sample_bytes]));
+    Imgui.SliderInt('Volume', @g_state.volume, 0, 128);
 
   ImGui.End_;
 end;
@@ -34,7 +39,10 @@ var
   src: pbyte;
 begin
   src := g_state.data + g_state.stream_position;
-  move(src^, stream^, len);
+  //move(src^, stream^, len);
+  FillByte(stream^, len, 0);
+  SDL_MixAudioFormat(stream, src, AUDIO_S16, len, g_state.volume);
+
   g_state.stream_position += len;
 end;
 
@@ -49,7 +57,7 @@ begin
       for i := 0 to num_audio_devices - 1 do
           writeln(SDL_GetAudioDeviceName(i, 0 {isCapture}));
 
-  desired.freq := 44100;
+  desired.freq := 44100;  //TODO must synchronize with freq in mp3 file, always use 44.1kHz for now
   desired.format := AUDIO_S16;
   desired.channels := 2;
   desired.samples := 4096;
@@ -105,6 +113,7 @@ begin
       stream_position := 0;
       data := nil;
       size := 0;
+      volume := SDL_MIX_MAXVOLUME;
   end;
 
   //load and decode mp3
