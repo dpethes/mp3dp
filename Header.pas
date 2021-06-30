@@ -49,7 +49,6 @@ type
     FOriginal: Boolean;
     FInitialSync: Boolean;
     FCRC: TCRC16;
-    FOffset: PCardinalArray;
     FChecksum: Cardinal;
     FFrameSize: Cardinal;
     FNumSlots: Cardinal;
@@ -82,7 +81,6 @@ type
     // subbands above that limit are in intensity stereo mode
 
     constructor Create;
-    destructor Destroy; override;
 
     function ReadHeader(Stream: TBitStream; var CRC: TCRC16): Boolean;
     // read a 32-bit header from the bitstream
@@ -152,16 +150,7 @@ begin
   FFrameSize := 0;
   FNumSlots := 0;
   FCRC := nil;
-  FOffset := nil;
   FInitialSync := False;
-end;
-
-destructor THeader.Destroy;
-begin
-  if (FOffset <> nil) then
-    FreeMem(FOffset);
-
-  inherited;
 end;
 
 function THeader.GetChecksumOK: Boolean;

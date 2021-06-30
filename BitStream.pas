@@ -29,8 +29,7 @@ type
   TSyncMode = (INITIAL_SYNC, STRICT_SYNC);
 
 const
-  BUFFERINTSIZE = 433;
-  // max. 1730 bytes per frame: 144 * 384kbit/s / 32000 Hz + 2 Bytes CRC
+  BUFFER_SIZE = 1448;  // 320000 {max. bitrate} / 32000 {freq} * 144 {num samples / 8} + 8 {padding, crc, header}
 
 type
   { TBitstreamReader }
@@ -45,8 +44,10 @@ type
     public
       constructor Create(const memory_buffer: pbyte);
       procedure Start();
-      function  Read(): longword;
-      function  Read(count: longword): longword;
+      function GetBytePosition: longword;
+      function GetBitPosition: longword;
+      function Read(): longword;
+      function Read(count: longword): longword;
   end;
 
 
@@ -54,7 +55,7 @@ type
   private
     FStream: TStream;
 
-    FBuffer: array[0..BUFFERINTSIZE-1] of Cardinal;
+    FBuffer: array[0..BUFFER_SIZE-1] of byte;
 
     FFrameSize: Cardinal;     // number of valid bytes in buffer
     FSyncWord: Cardinal;
@@ -80,6 +81,8 @@ type
     // Big-Endian byte order
     function FileSize: Cardinal;
     // Returns the size, in bytes, of the input file.
+
+    function CurrentDataPointer: pbyte;
   end;
 
 implementation
@@ -117,6 +120,11 @@ end;
 function TBitStream.FileSize: Cardinal;
 begin
   Result := FStream.Size;
+end;
+
+function TBitStream.CurrentDataPointer: pbyte;
+begin
+  result := bs.cur + (32 - bs.mask) div 4;
 end;
 
 function TBitStream.GetBits(NumberOfBits: Cardinal): Cardinal;
@@ -193,9 +201,22 @@ end;
 //called after memory buffer data changes
 procedure TBitstreamReader.Start();
 begin
-  cur  := buffer;
-  mask := 32;
+  if cur <> buffer then begin
+      cur  := buffer;
+      mask := 32;
+  end;
   bits := bswap( plongword(cur)^ );
+end;
+
+function TBitstreamReader.GetBytePosition: longword;
+begin
+  result := cur - buffer;
+  //result += (32 - mask + 7) div 8;  //bytes used from current buffer
+end;
+
+function TBitstreamReader.GetBitPosition: longword;
+begin
+  result := 8 * (cur - buffer) + (32 - mask);
 end;
 
 function TBitstreamReader.Read(): longword;

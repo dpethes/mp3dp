@@ -89,13 +89,13 @@ type
     FScaleFactors: TScaleFactors;
 
     FMaxGr: Cardinal;
-    FFrameStart: Integer;
     FPart2Start: Cardinal;
     FChannels: Cardinal;
     FFirstChannel: Cardinal;
     FLastChannel: Cardinal;
     FSFreq: Cardinal;
 
+    procedure DecodeGranule(gr: integer);
     function GetSideInfo: Boolean;
     procedure GetScaleFactors(ch: Cardinal; gr: Cardinal);
     procedure HuffmanDecode(ch: Cardinal; gr: Cardinal);
@@ -109,9 +109,6 @@ type
   public
     constructor Create(Stream: TBitStream; Header: THeader; Buffer: TStream);
     destructor Destroy; override;
-
-    // Notify decoder that a seek is being made
-    procedure SeekNotify;
 
     // Decode one frame, filling the buffer with the output samples
     procedure DecodeSingleFrame;
@@ -168,7 +165,6 @@ begin
   FBuffer := Buffer;
   FWhichChannels := Both;
 
-  FFrameStart := 0;
   if (FHeader.Mode = SingleChannel) then
     FChannels := 1
   else
@@ -219,61 +215,44 @@ begin
 end;
 
 procedure TLayerIII_Decoder.DecodeSingleFrame;
-var nSlots: Cardinal;
-    flush_main, ch, ss, sb, sb18: Cardinal;
-    main_data_end: Integer;
-    bytes_to_discard: Integer;
-    i, gr: Cardinal;
-    pcm_buffer: array[0..GRANULE_SAMPLES * 2 - 1] of int16;
-    pcm_buffer_pos: PInt16;
+var
+  nSlots: Cardinal;
 begin
   Assert(FHeader.Version = MPEG1, 'invalid format version');
 
-  nSlots := FHeader.Slots;
   GetSideInfo;
 
-  for i := 0 to nSlots-1 do
-    FBR.hputbuf(FStream.GetBits(8));
+  //handle bitreservoir
+  FBR.NewFrame(FSideInfo.main_data_begin);
+  nSlots := FHeader.Slots;
+  FBR.InsertMainData(FStream.CurrentDataPointer, nslots);
 
-  main_data_end := FBR.hsstell shr 3;  // of previous frame
+  DecodeGranule(0);
+  DecodeGranule(1);
 
-  flush_main := (FBR.hsstell and 7);
-  if (flush_main <> 0) then begin
-    FBR.hgetbits(8 - flush_main);
-    inc(main_data_end);
-  end;
+  FBR.EndFrame();
+end;
 
-  bytes_to_discard := FFrameStart - main_data_end - FSideInfo.main_data_begin;
-  inc(FFrameStart, nSlots);
-
-  if (bytes_to_discard < 0) then
-    exit;
-
-  if (main_data_end > 4096) then begin
-    dec(FFrameStart, 4096);
-    FBR.rewindNbytes(4096);
-  end;
-
-  while (bytes_to_discard > 0) do begin
-    FBR.hgetbits(8);
-    dec(bytes_to_discard);
-  end;
-
-  for gr := 0 to FMaxGr-1 do begin
-    for ch := 0 to FChannels-1 do begin
-      FPart2Start := FBR.hsstell;
+procedure TLayerIII_Decoder.DecodeGranule(gr: integer);
+var
+  ch, ss, sb, sb18: Cardinal;
+  pcm_buffer_pos: PInt16;
+  pcm_buffer: array[0..GRANULE_SAMPLES * 2 - 1] of int16;
+begin
+  for ch := 0 to FChannels-1 do begin
+      FPart2Start := FBR.bitPosition;
 
       GetScaleFactors(ch, gr);
       HuffmanDecode(ch, gr);
       DequantizeSample(FRO[ch], ch, gr);
-    end;
+  end;
 
-    Stereo(gr);
+  Stereo(gr);
 
-    if ((FWhichChannels = Downmix) and (FChannels > 1)) then
+  if ((FWhichChannels = Downmix) and (FChannels > 1)) then
       DoDownmix;
 
-    for ch := FFirstChannel to FLastChannel do begin
+  for ch := FFirstChannel to FLastChannel do begin
       Reorder(@FLR[ch], ch, gr);
       Antialias(ch, gr);
       Hybrid(ch, gr);
@@ -319,11 +298,10 @@ begin
           pcm_buffer_pos += 64;
         end;
       end;
-    end;
-
-    //both channels are now decoded and interleaved in pcm_buffer
-    FBuffer.WriteBuffer(pcm_buffer, GRANULE_SAMPLES * 2 {channels} * 2 {sample size});
   end;
+
+  //both channels are now decoded and interleaved in pcm_buffer
+  FBuffer.WriteBuffer(pcm_buffer, GRANULE_SAMPLES * 2 {channels} * 2 {sample size});
 end;
 
 procedure TLayerIII_Decoder.DequantizeSample(var xr: TSArray; ch: Cardinal; gr: Cardinal);
@@ -684,7 +662,7 @@ begin
 
   // Read count1 area
   h := @g_hufftables[FSideInfo.ch[ch].gr[gr].count1table_select + 32];
-  num_bits := FBR.hsstell;
+  num_bits := FBR.bitPosition;
 
   while ((num_bits < part2_3_end) and (index < 576)) do begin
     HuffmanDecoder(h, x, y, v, w, FBR);
@@ -695,19 +673,19 @@ begin
     FInputSamples[index+3] := y;
 
     inc(index, 4);
-    num_bits := FBR.hsstell;
+    num_bits := FBR.bitPosition;
   end;
 
+  //TODO DP is this for cases of errors in bitstream? otherwise makes no sense to me
   if (num_bits > part2_3_end) then begin
     FBR.rewindNbits(num_bits - part2_3_end);
     dec(index, 4);
+    num_bits := FBR.bitPosition;
   end;
-
-  num_bits := FBR.hsstell;
 
   // Dismiss stuffing bits
   if (num_bits < part2_3_end) then
-    FBR.hgetbits(part2_3_end - num_bits);
+    FBR.hgetbits(part2_3_end - num_bits);  //TODO DP do in chunks due to max read size, or implement seek (also for rewind)
 
   // Zero out rest
   if (index < 576) then
@@ -834,16 +812,6 @@ begin
     for index := 0 to 576-1 do
       FOut_1D[index] := xr1d[index];
   end;
-end;
-
-procedure TLayerIII_Decoder.SeekNotify;
-begin
-  FFrameStart := 0;
-
-  FillChar(FPrevBlock, Sizeof(FPrevBlock), 0);
-
-  FreeAndNil(FBR);
-  FBR := TBitReserve.Create;
 end;
 
 procedure TLayerIII_Decoder.Stereo(gr: Cardinal);

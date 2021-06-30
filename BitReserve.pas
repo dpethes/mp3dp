@@ -1,164 +1,139 @@
-(*
- *  File:     $RCSfile: BitReserve.pas,v $
- *  Revision: $Revision: 1.1.1.1 $
- *  Version : $Id: BitReserve.pas,v 1.1.1.1 2002/04/21 12:57:16 fobmagog Exp $
- *  Author:   $Author: fobmagog $
- *  Homepage: http://delphimpeg.sourceforge.net/
- *
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *)
+{
+buffer for frame data: current frame's main data can occur in previous frames (aka bit reservoir)
+}
 unit BitReserve;
-{$mode delphi}
 
 interface
 
+uses
+  bitstream;
+
 const
-  BUFSIZE = 4096;
+  BITRESERVE_BUFFER_SIZE = 2048;  //approx. max frame data size + max reserve (511 bytes)
 
 type
-  PCardinalArray = ^TCardinalArray;
-  TCardinalArray = array[0..1024*1024*32] of Cardinal;
+
+  { TBitReserve }
 
   TBitReserve = class
   private
-    FOffset, FTotbit, FBufByteIdx: Cardinal;
-    FBuf: PCardinalArray;
-    FBufBitIdx: Cardinal;
-    FPutMask: PCardinalArray;
+    bs: TBitstreamReader;
+    _size: integer;
+    FBuf: array[0..BITRESERVE_BUFFER_SIZE-1] of byte;
+
+    procedure FlushBytes(bytecount: integer);
+
 
   public
-    property hsstell: Cardinal read FTotBit;
+    function bitPosition: Cardinal;
 
     constructor Create;
     destructor Destroy; override;
 
+    procedure NewFrame(main_data_begin: integer);
+    procedure InsertMainData(src: pbyte; length: integer);
+    procedure EndFrame();
+
     function hgetbits(n: Cardinal): Cardinal;
     function hget1bit: Cardinal;
-    procedure hputbuf(val: Cardinal);
 
     procedure rewindNbits(n: Cardinal);
-    procedure rewindNbytes(n: Cardinal);
   end;
 
 implementation
-uses
-  SysUtils;
 
 { TBitReserve }
 
 constructor TBitReserve.Create;
-var ShiftedOne, i: Cardinal;
 begin
-  inherited Create;
-
-  ShiftedOne := 1;
-  FOffset := 0;
-  FTotbit := 0;
-  FBufByteIdx := 0;
-  FBuf := AllocMem(BUFSIZE * sizeof(Cardinal));
-  FBufBitIdx := 8;
-  FPutMask := AllocMem(32 * sizeof(Cardinal));
-
-  FPutMask[0] := 0;
-  for i := 1 to 31 do begin
-    FPutMask[i] := FPutMask[i-1] + ShiftedOne;
-    ShiftedOne := ShiftedOne shl 1;
-  end;
+  inherited create;
+  _size := 0;
+  bs := TBitstreamReader.Create(@FBuf[0]);
 end;
 
 destructor TBitReserve.Destroy;
 begin
-  FreeMem(FPutMask);
-  FreeMem(FBuf);
-
+  bs.Free;
   inherited Destroy;
+end;
+
+procedure TBitReserve.NewFrame(main_data_begin: integer);
+var
+  bytes_to_discard: integer;
+begin
+  Assert(main_data_begin < 512);
+
+  //remove padding - data from previous frame(s) which was unused and is now unreachable
+  bytes_to_discard := _size - main_data_begin;
+  if bytes_to_discard > 0 then
+      FlushBytes(bytes_to_discard);
+
+  //can usually happen in splits, if the frame has main_data in previous frame which does not exist anymore
+  //TODO if (bytes_to_discard < 0) signal FSideInfo error, do not process this frame, just insert new bytes to stream
+end;
+
+procedure TBitReserve.InsertMainData(src: pbyte; length: integer);
+begin
+  move(src^, FBuf[_size], length);
+  //reload bitreader buffer
+  if _size <= 4 then
+      bs.Start();
+  _size += length;
+end;
+
+procedure TBitReserve.EndFrame();
+var
+  out_bits: integer;
+begin
+  //bytealign bit reader position
+  out_bits := bs.GetBitPosition and 7;
+  if out_bits > 0 then
+      hgetbits(8 - out_bits);
+
+  //remove main_data of this frame
+  FlushBytes(0);
+end;
+
+//remove bytes that bitreader already processed and optionally some extra padding as well
+procedure TBitReserve.FlushBytes(bytecount: integer);
+begin
+  if bytecount = 0 then
+      bytecount := bs.GetBytePosition;
+  if bytecount > 0 then begin
+      _size -= bytecount;
+      move(FBuf[bytecount], FBuf[0], _size);
+      bs.Start();
+  end;
+end;
+
+
+function TBitReserve.bitPosition: Cardinal;
+begin
+  result := bs.GetBitPosition;
 end;
 
 // read 1 bit from the bit stream
 function TBitReserve.hget1bit: Cardinal;
-var val: Cardinal;
 begin
-  inc(FTotbit);
-
-  if (FBufBitIdx = 0) then begin
-    FBufBitIdx := 8;
-    inc(FBufByteIdx);
-  end;
-
-  // BUFSIZE = 4096 = 2^12, so
-  // buf_byte_idx%BUFSIZE == buf_byte_idx & 0xfff
-  val := FBuf[FBufByteIdx and $fff] and FPutMask[FBufBitIdx];
-  dec(FBufBitIdx);
-  Result := val shr FBufBitIdx;
+  result := bs.Read();
 end;
 
 // read N bits from the bit stream
 function TBitReserve.hgetbits(n: Cardinal): Cardinal;
-var val: Cardinal;
-    j, k, tmp: Cardinal;
 begin
-  inc(FTotbit, n);
-
-  val := 0;
-  j := N;
-
-  while (j > 0) do begin
-    if (FBufBitIdx = 0) then begin
-      FBufBitIdx := 8;
-      inc(FBufByteIdx);
-    end;
-
-    if (j < FBufBitIdx) then
-      k := j
-    else
-      k := FBufBitIdx;
-
-    // BUFSIZE = 4096 = 2^12, so
-    // buf_byte_idx%BUFSIZE == buf_byte_idx & 0xfff
-    tmp := FBuf[FBufByteIdx and $fff] and FPutMask[FBufBitIdx];
-    dec(FBufBitIdx, k);
-    tmp := tmp shr FBufBitIdx;
-    dec(j, k);
-    val := val or (tmp shl j);
+  if n = 0 then begin
+      result := 0;
+      exit;
   end;
-
-  Result := val;
+  result := bs.Read(n);
 end;
 
-// write 8 bits into the bit stream
-procedure TBitReserve.hputbuf(val: Cardinal);
-begin
-  FBuf[FOffset] := val;
-  FOffset := (FOffset + 1) and $fff;
-end;
 
 procedure TBitReserve.rewindNbits(n: Cardinal);
 begin
-  dec(FTotBit, n);
-  inc(FBufBitIdx, n);
-
-  while (FBufBitIdx >= 8) do begin
-    dec(FBufBitIdx, 8);
-    dec(FBufByteIdx);
-  end;
+  //TODO needs samples to verify that this is really what we need
+  Assert(n = 0);
 end;
 
-procedure TBitReserve.rewindNbytes(n: Cardinal);
-begin
-  dec(FTotBit, (N shl 3));
-  dec(FBufByteIdx, N);
-end;
 
 end.

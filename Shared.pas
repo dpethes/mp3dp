@@ -28,7 +28,6 @@ uses
 
 const
   OBUFFERSIZE  = 2 * 1152;  // max. 2 * 1152 samples per frame
-  MAX_CHANNELS = 2;         // max. number of channels
 
   SSLIMIT = 18;
   SBLIMIT = 32;
