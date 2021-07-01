@@ -25,13 +25,10 @@ type
 
   TMP3Stream = class
   private
-    FCRC: TCRC16;
     FLayer3: TLayerIII_Decoder;
 
   public
     constructor Create;
-    destructor Destroy; override;
-
     procedure DecodeFile(input: TStream; Output: TStream);
   end;
 
@@ -44,18 +41,11 @@ constructor TMP3Stream.Create;
 var
   i: Integer;
 begin
-  FCRC := nil;
   //init table for power of 4/3
   pow_43[0] := 0;
   for i := 1 to High(pow_43) do begin
       pow_43[i] := Power(i, 4/3);
   end;
-end;
-
-destructor TMP3Stream.Destroy;
-begin
-  if (Assigned(FCRC)) then
-    FreeAndNil(FCRC);
 end;
 
 procedure TMP3Stream.DecodeFile(input: TStream; Output: TStream);
@@ -65,12 +55,9 @@ var
   stream: TBitStream;
   header: THeader;
 begin
-  if (Assigned(FCRC)) then
-    FreeAndNil(FCRC);
-
   stream := TBitStream.Create(input);
   header := THeader.Create();
-  header.ReadHeader(stream, FCRC);
+  header.ReadHeader(stream);
 
   FLayer3 := TLayerIII_Decoder.Create(stream, header, Output);
 
@@ -82,7 +69,7 @@ begin
           break;
       end;
       FLayer3.DecodeSingleFrame;
-      has_frame := header.ReadHeader(stream, FCRC);
+      has_frame := header.ReadHeader(stream);
       frame_count += 1;
   end;
 

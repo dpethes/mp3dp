@@ -24,14 +24,23 @@ unit Header;
 
 interface
 uses
-  CRC, BitStream, BitReserve;
+  BitStream;
 
 type
   TVersion         = (MPEG2_LSF, MPEG1);
   TMode            = (Stereo, JointStereo, DualChannel, SingleChannel);
   TSampleFrequency = (SampleFreq_44p1, SampleFreq_48, SampleFreq_32, Unknown);
 
-type
+  TCRC16 = object
+  private
+    FCRC: Word;
+
+  public
+    procedure Init;
+    procedure AddBits(BitString: Cardinal; Length: Cardinal);
+    function Checksum: Word;
+  end;
+
   // Class for extraction information from a frame header:
   THeader = class
   private
@@ -48,14 +57,13 @@ type
     FCopyright: Boolean;
     FOriginal: Boolean;
     FInitialSync: Boolean;
-    FCRC: TCRC16;
+    //FCRC: TCRC16;
     FChecksum: Cardinal;
     FFrameSize: Cardinal;
     FNumSlots: Cardinal;
 
     function GetFrequency: Cardinal;
     function GetChecksums: Boolean;
-    function GetChecksumOK: Boolean;
     function GetPadding: Boolean;
 
   public
@@ -68,8 +76,6 @@ type
     property Checksums: Boolean read GetChecksums;
     property Copyright: Boolean read FCopyright;
     property Original: Boolean read FOriginal;
-    property ChecksumOK: Boolean read GetChecksumOK;
-    // compares computed checksum with stream checksum
     property Padding: Boolean read GetPadding;
     property Slots: Cardinal read FNumSlots;
     property ModeExtension: Cardinal read FModeExtension;
@@ -82,7 +88,7 @@ type
 
     constructor Create;
 
-    function ReadHeader(Stream: TBitStream; var CRC: TCRC16): Boolean;
+    function ReadHeader(Stream: TBitStream): Boolean;
     // read a 32-bit header from the bitstream
 
     function Bitrate: Cardinal;
@@ -98,18 +104,17 @@ type
   end;
 
 implementation
-uses
-  SysUtils;
-
-{ THeader }
 
 const
+  POLYNOMIAL: Word = $8005;
   mp3_bit_rate_index_tab: array[0..14] of word = (
     0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320
   );
   mp3_sampling_frequency_tab: array[TSampleFrequency] of word = (
     44100, 48000, 32000, 0
   );
+
+{ THeader }
 
 function THeader.Bitrate: Cardinal;
 begin
@@ -149,13 +154,8 @@ constructor THeader.Create;
 begin
   FFrameSize := 0;
   FNumSlots := 0;
-  FCRC := nil;
   FInitialSync := False;
-end;
-
-function THeader.GetChecksumOK: Boolean;
-begin
-  Result := (FChecksum = FCRC.Checksum);
+  //FCRC := FCRC.Create;
 end;
 
 function THeader.GetChecksums: Boolean;
@@ -193,7 +193,7 @@ begin
   Result := MSperFrameArray[FSampleFrequency];
 end;
 
-function THeader.ReadHeader(Stream: TBitStream; var CRC: TCRC16): Boolean;
+function THeader.ReadHeader(Stream: TBitStream): Boolean;
 var
   HeaderString, ChannelBitrate: integer;
 begin
@@ -279,16 +279,12 @@ begin
     exit;
   end;
 
+  { not useful until whole frame data is checked
   if (FProtectionBit = 0) then begin
-    // frame contains a crc checksum
-    FChecksum := Stream.GetBits(16);
-    if (FCRC = nil) then
-      FCRC := TCRC16.Create;
-
-    FCRC.AddBits(HeaderString, 16);
-    CRC := FCRC;
-  end else
-    CRC := nil;
+      FCRC.Init();
+      FCRC.AddBits(HeaderString, 16);  //16bits of header starting from bitrate index
+  end;
+  }
 
   Result := True;
 end;
@@ -296,6 +292,35 @@ end;
 function THeader.TotalMS(Stream: TBitStream): Single;
 begin
   Result := MaxNumberOfFrames(Stream) * MSPerFrame;
+end;
+
+
+{ TCRC16 }
+
+// feed a bitstring to the crc calculation (0 < length <= 32)
+procedure TCRC16.AddBits(BitString, Length: Cardinal);
+var BitMask: Cardinal;
+begin
+  BitMask := 1 shl (Length - 1);
+  repeat
+    if ((FCRC and $8000 = 0) xor (BitString and BitMask = 0)) then begin
+      FCRC := FCRC shl 1;
+      FCRC := FCRC xor POLYNOMIAL;
+    end else
+      FCRC := FCRC shl 1;
+
+    BitMask := BitMask shr 1;
+  until (BitMask = 0);
+end;
+
+function TCRC16.Checksum: Word;
+begin
+  Result := FCRC;
+end;
+
+procedure TCRC16.Init;
+begin
+  FCRC := $FFFF;
 end;
 
 end.
