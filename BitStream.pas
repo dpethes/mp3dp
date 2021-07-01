@@ -48,6 +48,7 @@ type
       function GetBitPosition: longword;
       function Read(): longword;
       function Read(count: longword): longword;
+      procedure SkipBack(count: longword);
   end;
 
 
@@ -123,8 +124,11 @@ begin
 end;
 
 function TBitStream.CurrentDataPointer: pbyte;
+var
+  bytes_from_buffer: integer;
 begin
-  result := bs.cur + (32 - bs.mask) div 4;
+  bytes_from_buffer := (32 - bs.mask) div 8;
+  result := bs.cur + bytes_from_buffer;
 end;
 
 function TBitStream.GetBits(NumberOfBits: Cardinal): Cardinal;
@@ -247,6 +251,18 @@ begin
       mask := 32 - bits_left;
       if bits_left > 0 then
           result := result or (bits shr mask);
+  end;
+end;
+
+procedure TBitstreamReader.SkipBack(count: longword);
+begin
+  Assert(count < 32, 'count of bits to skip is over 31');
+  if mask + count <= 32 then
+      mask += count
+  else begin
+      cur -= 4;
+      bits := bswap( plongword(cur)^ );
+      mask := mask + count - 32;
   end;
 end;
 

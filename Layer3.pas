@@ -611,7 +611,7 @@ var i: Cardinal;
     num_bits: Integer;
     region1Start: Cardinal;
     region2Start: Cardinal;
-    index: Integer;
+    index, bits_to_skip: Integer;
     h: PHuffCodeTab;
     gr_info: TGrInfo;
 begin
@@ -654,7 +654,7 @@ begin
   h := @g_hufftables[gr_info.count1table_select + 32];
   num_bits := FBR.bitPosition;
 
-  while ((num_bits < part2_3_end) and (index < 576)) do begin
+  while ((num_bits < part2_3_end) and (index + 4 < 576)) do begin
     HuffmanDecoder(h, x, y, v, w, FBR);
 
     FInputSamples[index] := v;
@@ -666,16 +666,19 @@ begin
     num_bits := FBR.bitPosition;
   end;
 
-  //TODO DP is this for cases of errors in bitstream? otherwise makes no sense to me
+  //seems we read way too far - error in bitstream?
   if (num_bits > part2_3_end) then begin
-    FBR.rewindNbits(num_bits - part2_3_end);
-    dec(index, 4);
-    num_bits := FBR.bitPosition;
+      bits_to_skip := num_bits - part2_3_end;
+      FBR.RewindBits(bits_to_skip);
+      dec(index, 4);
+      num_bits := FBR.bitPosition;
   end;
 
-  // Dismiss stuffing bits
-  if (num_bits < part2_3_end) then
-    FBR.hgetbits(part2_3_end - num_bits);  //TODO DP do in chunks due to max read size, or implement seek (also for rewind)
+  // Dismiss stuffing bits (test with si.bit)
+  if (num_bits < part2_3_end) then begin
+      bits_to_skip := part2_3_end - num_bits;
+      FBR.SkipBits(bits_to_skip);
+  end;
 
   // Zero out rest
   if (index < 576) then

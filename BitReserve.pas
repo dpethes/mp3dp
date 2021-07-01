@@ -37,7 +37,8 @@ type
     function hgetbits(n: Cardinal): Cardinal;
     function hget1bit: Cardinal;
 
-    procedure rewindNbits(n: Cardinal);
+    procedure RewindBits(n: Cardinal);
+    procedure SkipBits(n: cardinal);
   end;
 
 implementation
@@ -129,11 +130,24 @@ begin
 end;
 
 
-procedure TBitReserve.rewindNbits(n: Cardinal);
+procedure TBitReserve.RewindBits(n: Cardinal);
 begin
-  //TODO needs samples to verify that this is really what we need
-  Assert(n = 0);
+  while n > 31 do begin
+      bs.SkipBack(31);
+      n -= 31;
+  end;
+  if n > 0 then
+      bs.SkipBack(n);
 end;
 
+procedure TBitReserve.SkipBits(n: cardinal);
+begin
+  while n > 31 do begin
+      bs.Read(31);
+      n -= 31;
+  end;
+  if n > 0 then
+      bs.Read(n)
+end;
 
 end.
