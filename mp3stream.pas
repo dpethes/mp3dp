@@ -46,6 +46,7 @@ begin
   for i := 1 to High(pow_43) do begin
       pow_43[i] := Power(i, 4/3);
   end;
+  InitReorderTable;
 end;
 
 procedure TMP3Stream.DecodeFile(input: TStream; Output: TStream);

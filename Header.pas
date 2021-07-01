@@ -24,12 +24,11 @@ unit Header;
 
 interface
 uses
-  BitStream;
+  BitStream, L3Tables;
 
 type
   TVersion         = (MPEG2_LSF, MPEG1);
   TMode            = (Stereo, JointStereo, DualChannel, SingleChannel);
-  TSampleFrequency = (SampleFreq_44p1, SampleFreq_48, SampleFreq_32, Unknown);
 
   TCRC16 = object
   private

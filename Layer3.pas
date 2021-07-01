@@ -175,9 +175,7 @@ begin
   else
     FMaxGr := 1;
 
-  FSFreq := Cardinal(FHeader.SampleFrequency);//FHeader.Frequency;
-  if (FHeader.Version = MPEG1) then
-    FSFreq := FSFreq + 3;
+  FSFreq := Cardinal(FHeader.SampleFrequency);
 
   if (FChannels = 2) then begin
     case FWhichChannels of
@@ -783,7 +781,7 @@ begin
       end;
     end else begin  // pure short
       for index := 0 to 576-1 do
-        FOut_1D[index] := xr1d[reorder_table[FSFreq][index]];
+        FOut_1D[index] := xr1d[L3_short_reorder_table[FSFreq][index]];
     end;
   end else begin  // long blocks
     for index := 0 to 576-1 do

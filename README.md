@@ -1,14 +1,14 @@
 mp3dp - MP3 decoder for Pascal
 ===========
 
-Decoder for MPEG layer 3 streams, usable for Freepascal projects. Compiles to about 45kB of code on x86.
+Decoder for MPEG layer 3 streams, usable for Freepascal projects. Compiles to about 35kB of code on x86.
 Derived from Delphi port of "maplay" version 1.2 (https://sourceforge.net/projects/delphimpeg/), which has some decoding bugs.
 Changes:
 * decoding bugfixes
 * replaced player demo
 * general code cleanup (a lot of unused/weird code, dating back to 90's C decoders)
 * code size optimizations
-* removed Layer 2 decoder code, MPEG2 LSF extension, intensity stereo code
+* removed Layer 2 decoder code, MPEG2 LSF extension
 * usable in 64bit projects
 
 Usage and compilation
@@ -25,15 +25,15 @@ There are 2 Lazarus project files that show the usage of the decoder:
 Limitations
 -----------
 * assumes little-endian arch
-* intensity stereo mode decoding is not supported
+* intensity stereo mode decoding is disabled (untested, might work)
 * doesn't support MPEG2 LSF extension
 
 Todo
 -----------
 * decode by frames/chunks to reduce required memory size
 * mp3 file analysis to handle tags, seeking
-* reduce code size
 * intensity stereo mode decoding - need samples
+* reduce code size
 * maybe re-add MPEG2 LSF extension handling, but needs samples
 
 Thanks
