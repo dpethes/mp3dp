@@ -23,6 +23,9 @@ unit L3Tables;
 
 interface
 
+uses
+  math;
+
 const
   slen: array[0..1, 0..15] of uint8 = (
     (0, 0, 0, 0, 3, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4),
@@ -60,30 +63,18 @@ const
     3.7252902985E-09, 2.6341780319E-09, 1.8626451492E-09, 1.3170890160E-09,
     9.3132257462E-10, 6.5854450798E-10, 4.6566128731E-10, 3.2927225399E-10);
 
-  TAN12: array[0..15] of Single = (
-     0.0,         0.26794919,  0.57735027,    1.0,
-     1.73205081,  3.73205081,  9.9999999e10, -3.73205081,
-    -1.73205081, -1.0,        -0.57735027,   -0.26794919,
-     0.0,         0.26794919,  0.57735027,    1.0);
 
-
-  cs: array[0..7] of Single = (
-    0.857492925712, 0.881741997318, 0.949628649103, 0.983314592492,
-    0.995517816065, 0.999160558175, 0.999899195243, 0.999993155067);
-
-  ca: array[0..7] of Single = (
-    -0.5144957554270, -0.4717319685650, -0.3133774542040, -0.1819131996110,
-    -0.0945741925262, -0.0409655828852, -0.0141985685725, -0.00369997467375);
 type
   TSampleFrequency = (SampleFreq_44p1 = 0, SampleFreq_48, SampleFreq_32, Unknown);
 
 var
-  //largest huff encoded value for maximum linbits (13): 15 + (1 << 13 - 1)
-  pow_43: array[0..8206] of Single;
+  //table for power of 4/3. Top index is the largest huff encoded value for maximum linbits (13): 15 + (1 << 13 - 1)
+  L3_pow_43: array[0..8206] of Single;
 
   L3_short_reorder_table: array[0..2, 0..575] of uint16;
 
 procedure InitReorderTable;
+procedure InitPower43Table;
 
 implementation
 
@@ -106,6 +97,16 @@ begin
                   j += 1;
               end;
       end;
+  end;
+end;
+
+procedure InitPower43Table;
+var
+  i: Integer;
+begin
+  L3_pow_43[0] := 0;
+  for i := 1 to High(L3_pow_43) do begin
+      L3_pow_43[i] := Power(i, 4/3);
   end;
 end;
 

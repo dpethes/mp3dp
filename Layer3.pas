@@ -121,10 +121,19 @@ uses
 { TLayerIII_Decoder }
 
 procedure TLayerIII_Decoder.Antialias(ch: Cardinal; gr: Cardinal);
-var ss, sb18, sb18lim: Cardinal;
-    gr_info: PGRInfo;
-    bu, bd: Single;
-    src_idx1, src_idx2: Integer;
+const
+  cs: array[0..7] of Single = (
+    0.857492925712, 0.881741997318, 0.949628649103, 0.983314592492,
+    0.995517816065, 0.999160558175, 0.999899195243, 0.999993155067);
+
+  ca: array[0..7] of Single = (
+    -0.5144957554270, -0.4717319685650, -0.3133774542040, -0.1819131996110,
+    -0.0945741925262, -0.0409655828852, -0.0141985685725, -0.00369997467375);
+var
+  gr_info: PGRInfo;
+  ss, sb18, sb18lim: integer;
+  bu, bd: Single;
+  src_idx1, src_idx2: Integer;
 begin
   gr_info := @FSideInfo.ch[ch].gr[gr];
 
@@ -325,9 +334,9 @@ begin
     else begin
       abv := FInputSamples[j];
       if (abv > 0) then
-        xr1d[j] := g_gain * pow_43[abv]
+        xr1d[j] := g_gain * L3_pow_43[abv]
       else
-        xr1d[j] := -g_gain * pow_43[-abv];
+        xr1d[j] := -g_gain * L3_pow_43[-abv];
     end;
   end;
 
