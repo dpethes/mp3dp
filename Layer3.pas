@@ -101,7 +101,7 @@ type
     procedure HuffmanDecode(ch: Cardinal; gr: Cardinal);
     procedure DequantizeSample(var xr: TSArray; ch: Cardinal; gr: Cardinal);
     procedure Reorder(xr: PSArray; ch: Cardinal; gr: Cardinal);
-    procedure Stereo(gr: Cardinal);
+    procedure Stereo();
     procedure Antialias(ch: Cardinal; gr: Cardinal);
     procedure Hybrid(ch: Cardinal; gr: Cardinal);
     procedure DoDownmix;
@@ -248,7 +248,7 @@ begin
       DequantizeSample(FRO[ch], ch, gr);
   end;
 
-  Stereo(gr);
+  Stereo();
 
   if ((FWhichChannels = Downmix) and (FChannels > 1)) then
       DoDownmix;
@@ -791,18 +791,12 @@ begin
   end;
 end;
 
-procedure TLayerIII_Decoder.Stereo(gr: Cardinal);
+procedure TLayerIII_Decoder.Stereo();
 var sb, ss: Integer;
     is_pos: array[0..575] of Cardinal;
     mode_ext: Cardinal;
     i: Integer;
     ms_stereo, i_stereo: Boolean;
-    { IS vars
-    is_ratio: array[0..575] of Single;
-    max_sfb, sfbcnt, sfb: Integer;
-    sfx, i, j, lines, temp, temp2: Integer;
-    gr_info: PGRInfo;
-    }
 begin
   if (FChannels = 1) then begin  // mono , bypass xr[0][][] to lr[0][][]
     for sb := 0 to SBLIMIT-1 do begin
@@ -817,219 +811,14 @@ begin
   end else begin
     mode_ext := FHeader.ModeExtension;
     ms_stereo := (FHeader.Mode = JointStereo) and (Mode_Ext and $2 <> 0);
-    i_stereo := (FHeader.Mode = JointStereo) and (Mode_Ext and $1 <> 0);
-    //gr_info := @FSideInfo.ch[0].gr[gr];
-    //io_type := (gr_info.scalefac_compress and 1);  //unused?
+    i_stereo  := (FHeader.Mode = JointStereo) and (Mode_Ext and $1 <> 0);
+
+    // removed intensity stereo code due to lack of samples; lame doesn't support it
+    Assert(i_stereo = false, 'intensity stereo not supported atm');
 
     // initialization
     for i := 0 to 576-1 do
       is_pos[i] := 7;
-
-    Assert(i_stereo = false, 'intensity stereo not supported atm');
-    { disabled to simplify porting
-    if (i_stereo) then begin
-      if (gr_info.window_switching_flag <> 0) and (gr_info.block_type = 2) then begin
-        if (gr_info.mixed_block_flag <> 0) then begin
-          max_sfb := 0;
-
-          for j := 0 to 2 do begin
-            sfbcnt := 2;
-            sfb := 12;
-            while (sfb >= 3) do begin
-              i := sfBandIndex[FSFreq].s[sfb];
-              lines := sfBandIndex[FSFreq].s[sfb+1] - i;
-              i := (i shl 2) - i + (j+1) * lines - 1;
-
-              while (lines > 0) do begin
-                if (FRO[1][ss_div[i]][ss_mod[i]] <> 0.0) then begin
-                  sfbcnt := sfb;
-                  sfb := -10;
-                  lines := -10;
-                end;
-
-                dec(lines);
-                dec(i);
-              end;
-              
-              dec(sfb);
-            end;
-            sfb := sfbcnt + 1;
-
-            if (sfb > max_sfb) then
-              max_sfb := sfb;
-
-            while (sfb < 12) do begin
-              temp := sfBandIndex[FSFreq].s[sfb];
-              sb := sfBandIndex[FSFreq].s[sfb+1] - temp;
-              i := (temp shl 2) - temp + j * sb;
-
-              while (sb > 0) do begin
-                is_pos[i] := FScaleFactors[1].short[j][sfb];
-                if (is_pos[i] <> 7) then
-                  is_ratio[i] := TAN12[is_pos[i]];
-
-                inc(i);
-                dec(sb);
-              end;
-              inc(sfb);
-            end;
-
-            sfb := sfBandIndex[FSFreq].s[10];
-            sb := sfBandIndex[FSFreq].s[11] - sfb;
-            sfb := (sfb shl 2) - sfb + j * sb;
-            temp := sfBandIndex[FSFreq].s[11];
-            sb := sfBandIndex[FSFreq].s[12] - temp;
-            i := (temp shl 2) - temp + j * sb;
-
-            while (sb > 0) do begin
-              is_pos[i] := is_pos[sfb];
-              is_ratio[i] := is_ratio[sfb];
-
-              inc(i);
-              dec(sb);
-            end;
-          end;
-
-          if (max_sfb <= 3) then begin
-            i := 2;
-            ss := 17;
-            sb := -1;
-            while (i >= 0) do begin
-              if (FRO[1][i][ss] <> 0.0) then begin
-                sb := (i shl 4) + (i shl 1) + ss;
-                i := -1;
-              end else begin
-                dec(ss);
-                if (ss < 0) then begin
-                  dec(i);
-                  ss := 17;
-                end;
-              end;
-            end;
-
-            i := 0;
-            while (sfBandIndex[FSFreq].l[i] <= sb) do
-              inc(i);
-
-            sfb := i;
-            i := sfBandIndex[FSFreq].l[i];
-            while (sfb < 8) do begin
-              sb := sfBandIndex[FSFreq].l[sfb+1] - sfBandIndex[FSFreq].l[sfb];
-              while (sb > 0) do begin
-                is_pos[i] := FScaleFactors[1].long[sfb];
-                if (is_pos[i] <> 7) then
-                  is_ratio[i] := TAN12[is_pos[i]];
-
-                inc(i);
-                inc(sb);
-              end;
-              inc(sfb);
-            end;
-          end;
-        end else begin  // if (gr_info->mixed_block_flag)
-          for j := 0 to 2 do begin
-            sfbcnt := -1;
-            sfb := 12;
-            while (sfb >= 0) do begin
-              temp := sfBandIndex[FSFreq].s[sfb];
-              lines := sfBandIndex[FSFreq].s[sfb+1] - temp;
-              i := (temp shl 2) - temp + (j+1) * lines - 1;
-
-              while (lines > 0) do begin
-                if (FRO[1][ss_div[i]][ss_mod[i]] <> 0.0) then begin
-                  sfbcnt := sfb;
-                  sfb := -10;
-                  lines := -10;
-                end;
-
-                dec(lines);
-                dec(i);
-              end;
-              dec(sfb);
-            end;
-
-            sfb := sfbcnt + 1;
-            while (sfb < 12) do begin
-              temp := sfBandIndex[FSFreq].s[sfb];
-              sb := sfBandIndex[FSFreq].s[sfb+1] - temp;
-              i := (temp shl 2) - temp + j * sb;
-              while (sb > 0) do begin
-                // dec(sb);
-                is_pos[i] := FScaleFactors[1].short[j][sfb];
-                if (is_pos[i] <> 7) then
-                  is_ratio[i] := TAN12[is_pos[i]];
-
-                inc(i);
-                dec(sb);
-              end;
-
-              inc(sfb);
-            end;
-
-            temp := sfBandIndex[FSFreq].s[10];
-            temp2 := sfBandIndex[FSFreq].s[11];
-            sb   := temp2 - temp;
-            sfb  := (temp shl 2) - temp + j * sb;
-            sb   := sfBandIndex[FSFreq].s[12] - temp2;
-            i    := (temp2 shl 2) - temp2 + j * sb;
-
-            while (sb > 0) do begin
-              is_pos[i] := is_pos[sfb];
-              is_ratio[i] := is_ratio[sfb];
-
-              inc(i);
-              dec(sb);
-            end;
-          end;
-        end;
-      end else begin  // if (gr_info->window_switching_flag ...
-        i := 31;
-        ss := 17;
-        sb := 0;
-        while (i >= 0) do begin
-          if (FRO[1][i][ss] <> 0.0) then begin
-            sb := (i shl 4) + (i shl 1) + ss;
-            i := -1;
-          end else begin
-            dec(ss);
-            if (ss < 0) then begin
-              dec(i);
-              ss := 17;
-            end;
-          end;
-        end;
-
-        i := 0;
-        while (sfBandIndex[FSFreq].l[i] <= sb) do
-          inc(i);
-
-        sfb := i;
-        i := sfBandIndex[FSFreq].l[i];
-        while (sfb < 21) do begin
-          sb := sfBandIndex[FSFreq].l[sfb+1] - sfBandIndex[FSFreq].l[sfb];
-          while (sb > 0) do begin
-            is_pos[i] := FScaleFactors[1].long[sfb];
-            if (is_pos[i] <> 7) then
-              is_ratio[i] := TAN12[is_pos[i]];
-
-            inc(i);
-            dec(sb);
-          end;
-          inc(sfb);
-        end;
-
-        sfb := sfBandIndex[FSFreq].l[20];
-        sb := 576 - sfBandIndex[FSFreq].l[21];
-        while (sb > 0) and (i < 576) do begin
-          is_pos[i] := is_pos[sfb]; // error here : i >=576
-          is_ratio[i] := is_ratio[sfb];
-
-          inc(i);
-          dec(sb);
-        end;
-      end;
-    end;
-    }
 
     i := 0;
     for sb := 0 to SBLIMIT-1 do
@@ -1042,10 +831,6 @@ begin
             FLR[0][sb][ss] := FRO[0][sb][ss];
             FLR[1][sb][ss] := FRO[1][sb][ss];
           end;
-        { disabled to simplify porting
-        end else if (i_stereo) then begin
-          FLR[1][sb][ss] := FRO[0][sb][ss] / (1 + is_ratio[i]);
-          FLR[0][sb][ss] := FLR[1][sb][ss] * is_ratio[i]; }
         end;
 
         inc(i);

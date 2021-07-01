@@ -3,7 +3,7 @@ unit mp3stream;
 interface
 uses
   sysUtils, classes, math,
-  CRC, Layer3, Header, BitStream, L3Tables;
+  Layer3, Header, BitStream, L3Tables;
 
 type
   TDecodedSlice = record

@@ -52,7 +52,7 @@
         <Mode0 Name="default"/>
       </Modes>
     </RunParams>
-    <Units Count="15">
+    <Units Count="14">
       <Unit0>
         <Filename Value="mp3player_demo.lpr"/>
         <IsPartOfProject Value="True"/>
@@ -79,41 +79,37 @@
         <IsPartOfProject Value="True"/>
       </Unit5>
       <Unit6>
-        <Filename Value="..\CRC.pas"/>
+        <Filename Value="..\Header.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit6>
       <Unit7>
-        <Filename Value="..\Header.pas"/>
+        <Filename Value="..\Huffman.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit7>
       <Unit8>
-        <Filename Value="..\Huffman.pas"/>
+        <Filename Value="..\InvMDT.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit8>
       <Unit9>
-        <Filename Value="..\InvMDT.pas"/>
+        <Filename Value="..\L3Tables.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit9>
       <Unit10>
-        <Filename Value="..\L3Tables.pas"/>
+        <Filename Value="..\Layer3.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit10>
       <Unit11>
-        <Filename Value="..\Layer3.pas"/>
+        <Filename Value="..\Shared.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit11>
       <Unit12>
-        <Filename Value="..\Shared.pas"/>
+        <Filename Value="..\SynthFilter.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit12>
       <Unit13>
-        <Filename Value="..\SynthFilter.pas"/>
-        <IsPartOfProject Value="True"/>
-      </Unit13>
-      <Unit14>
         <Filename Value="..\mp3stream.pas"/>
         <IsPartOfProject Value="True"/>
-      </Unit14>
+      </Unit13>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

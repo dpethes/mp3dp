@@ -8,7 +8,7 @@ Changes:
 * replaced player demo
 * general code cleanup (a lot of unused/weird code, dating back to 90's C decoders)
 * code size optimizations
-* removed Layer 2 decoder code, MPEG2 LSF extension
+* removed Layer 2 decoder code, MPEG2 LSF extension, intensity stereo code
 * usable in 64bit projects
 
 Usage and compilation
@@ -25,15 +25,15 @@ There are 2 Lazarus project files that show the usage of the decoder:
 Limitations
 -----------
 * assumes little-endian arch
-* intensity stereo mode decoding is disabled (untested, might work)
+* intensity stereo mode decoding is not supported
 * doesn't support MPEG2 LSF extension
 
 Todo
 -----------
 * decode by frames/chunks to reduce required memory size
 * mp3 file analysis to handle tags, seeking
-* intensity stereo mode decoding - need samples
 * reduce code size
+* intensity stereo mode decoding - need samples
 * maybe re-add MPEG2 LSF extension handling, but needs samples
 
 Thanks
