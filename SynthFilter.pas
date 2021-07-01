@@ -42,19 +42,15 @@ type
     FActualV: PSingleArray;     // v1 or v2
     FActualWritePos: Cardinal;  // 0-15
     FSamples: array[0..31] of Single;  // 32 new subband samples
-    FChannel: Cardinal;
     procedure ComputeNewV;
     procedure ComputePCMSample(outbuffer: PInt16);
 
   public
-    constructor Create(ChannelNumber: Cardinal);
+    constructor Create();
     procedure InputSample(Sample: Single; SubBandNumber: Cardinal);
 
-    // calculate 32 PCM samples and put the into the Obuffer-object
+    // calculate 32 PCM samples
     procedure CalculatePCMSamples(outbuffer: PInt16);
-
-    // reset the synthesis filter
-    procedure Reset;
   end;
 
 implementation
@@ -95,9 +91,8 @@ const
   cos1_4   : single = 1.0 / (2.0 * cos(MY_PI / 4.0));
 
 const
-  d: array[0..511] of Single = (
-    // Note: These values are not in the same order
-    // as in Annex 3-B.3 of the ISO/IEC DIS 11172-3
+  //values are transposed
+  window: array[0..511] of Single = (
      0.000000000, -0.000442505,  0.003250122, -0.007003784,
      0.031082153, -0.078628540,  0.100311279, -0.572036743,
      1.144989014,  0.572036743,  0.100311279,  0.078628540,
@@ -230,6 +225,21 @@ const
 
 { TSynthesisFilter }
 
+constructor TSynthesisFilter.Create();
+begin
+  FillChar(FV1, sizeof(FV1), 0);
+  FillChar(FV2, sizeof(FV2), 0);
+  FillChar(FSamples, sizeof(FSamples), 0);
+
+  FActualV := @FV1;
+  FActualWritePos := 15;
+end;
+
+procedure TSynthesisFilter.InputSample(Sample: Single; SubBandNumber: Cardinal);
+begin
+  FSamples[subbandnumber] := sample;
+end;
+
 procedure TSynthesisFilter.CalculatePCMSamples(outbuffer: PInt16);
 begin
   ComputeNewV;
@@ -255,27 +265,6 @@ begin
     Result := -32768
   else
     Result := v;
-(*
-#ifdef TRUNC_ROUNDING
-
-  inline int16 clip(real sample)
-  {
-  	return ((sample > 32767.0f) ? 32767 :
-           ((sample < -32768.0f) ? -32768 :
-           ((sample < 0.0f) ? -((int16) (-sample + 0.5f))
-           					    :   (int16) ( sample + 0.5f)) ));
-  }
-
-#else
-
-  inline int16 clip(real sample)
-  {
-  	return ((sample > 32767.0f) ? 32767 :
-           ((sample < -32768.0f) ? -32768 :
-			  (int16) sample));
-  }
-#endif // TRUNC_ROUNDING
-*)
 end;
 
 procedure TSynthesisFilter.ComputeNewV;
@@ -593,11 +582,9 @@ var
   vp, vp_src: PSingle;
   pcm_sample_clip: int16;
 begin
-  vp := @FActualV[0];
-  vp_src := @FActualV[0];
-
-  dp := @d[0];
   pcm_sample_index := 0;
+  vp_src := @FActualV[0];
+  dp := @window[0];
 
   //Offset the sample buffer depending on writepos. Works by inserting the samples twice
   vp := @vp_buff[FActualWritePos + 1];
@@ -635,26 +622,5 @@ begin
   end;
 end;
 
-constructor TSynthesisFilter.Create(ChannelNumber: Cardinal);
-begin
-  Reset;
-  FChannel := ChannelNumber;
-end;
-
-procedure TSynthesisFilter.InputSample(Sample: Single;
-  SubBandNumber: Cardinal);
-begin
-  FSamples[subbandnumber] := sample;
-end;
-
-procedure TSynthesisFilter.Reset;
-begin
-  FillChar(FV1, sizeof(FV1), 0);
-  FillChar(FV2, sizeof(FV2), 0);
-  FillChar(FSamples, sizeof(FSamples), 0);
-
-  FActualV := @FV1;
-  FActualWritePos := 15;
-end;
 
 end.

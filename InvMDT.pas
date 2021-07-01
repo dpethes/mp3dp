@@ -30,18 +30,6 @@ procedure InvMDCT(input: PSingleArray; output: PSingleArray; block_type: Integer
 
 implementation
 
-const
-  PI12     =  0.261799387;
-  PI36     =  0.087266462;
-  COSPI3   =  0.500000000;
-  COSPI6   =  0.866025403;
-  DCTODD1  =  0.984807753;
-  DCTODD2  = -0.342020143;
-  DCTODD3  = -0.642787609;
-  DCTEVEN1 =  0.939692620;
-  DCTEVEN2 = -0.173648177;
-  DCTEVEN3 = -0.766044443;
-
 (*
 This uses Byeong Gi Lee's Fast Cosine Transform algorithm to
 decompose the 36 point and 12 point IDCT's into 9 point and 3
@@ -95,7 +83,7 @@ const
 procedure InvMDCT(input: PSingleArray; output: PSingleArray; block_type: Integer);
 var tmp: array[0..17] of Single;
     win_bt: PSingleArray;
-    i, p: integer;
+    i: integer;
     six_i: Integer;
     pp1, pp2, sum, save: Single;
     tmp0, tmp1, tmp2, tmp3, tmp4, tmp0_, tmp1_, tmp2_, tmp3_: Single;
@@ -103,19 +91,8 @@ var tmp: array[0..17] of Single;
     i0, i0p12, i6_, e, o: Single;
 begin
   if (block_type = 2) then begin
-    p := 0;
-    while (p < 36) do begin
-      output[p]   := 0.0;
-      output[p+1] := 0.0;
-      output[p+2] := 0.0;
-      output[p+3] := 0.0;
-      output[p+4] := 0.0;
-      output[p+5] := 0.0;
-      output[p+6] := 0.0;
-      output[p+7] := 0.0;
-      output[p+8] := 0.0;
-      inc(p, 9);
-    end;
+    for i := 0 to 35 do
+        output[i] := 0;
 
     six_i := 0;
     for i := 0 to 2 do begin

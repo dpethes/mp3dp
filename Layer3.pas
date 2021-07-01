@@ -81,7 +81,7 @@ type
 
     FStream: TBitStream;
     FHeader: THeader;
-    FFilter1, FFilter2: TSynthesisFilter;
+    FFilter: array[0..1] of TSynthesisFilter;  //separate filter for each channel
     FBuffer: TStream;
     FWhichChannels: TChannels;
     FBR: TBitReserve;
@@ -96,7 +96,7 @@ type
     FSFreq: Cardinal;
 
     procedure DecodeGranule(gr: integer);
-    function GetSideInfo: Boolean;
+    procedure GetSideInfo;
     procedure GetScaleFactors(ch: Cardinal; gr: Cardinal);
     procedure HuffmanDecode(ch: Cardinal; gr: Cardinal);
     procedure DequantizeSample(var xr: TSArray; ch: Cardinal; gr: Cardinal);
@@ -157,8 +157,8 @@ constructor TLayerIII_Decoder.Create(Stream: TBitStream; Header: THeader; Buffer
 begin
   Assert(Header.Version = MPEG1, 'invalid format version');
 
-  FFilter1 := TSynthesisFilter.Create(0);
-  FFilter2 := TSynthesisFilter.Create(1);
+  FFilter[0] := TSynthesisFilter.Create();
+  FFilter[1] := TSynthesisFilter.Create();
 
   FStream := Stream;
   FHeader := Header;
@@ -221,6 +221,7 @@ begin
   Assert(FHeader.Version = MPEG1, 'invalid format version');
 
   GetSideInfo;
+  //we can check if SideInfo is valid, but probably want to decode anyway
 
   //handle bitreservoir
   FBR.NewFrame(FSideInfo.main_data_begin);
@@ -269,34 +270,18 @@ begin
       end;
 
       // Polyphase synthesis
-      if ((ch = 0) or (FWhichChannels = Right)) then begin
-        pcm_buffer_pos := @pcm_buffer[0];
-        for ss := 0 to SSLIMIT-1 do begin
+      pcm_buffer_pos := @pcm_buffer[ch];
+      for ss := 0 to SSLIMIT-1 do begin
           sb := 0;
           sb18 := 0;
           while (sb18 < 576) do begin
-            FFilter1.InputSample(FOut_1D[sb18 + ss], sb);
+            FFilter[ch].InputSample(FOut_1D[sb18 + ss], sb);
             inc(sb18, 18);
             inc(sb);
           end;
 
-          FFilter1.CalculatePCMSamples(pcm_buffer_pos);
+          FFilter[ch].CalculatePCMSamples(pcm_buffer_pos);
           pcm_buffer_pos += 64;
-        end;
-      end else begin
-        pcm_buffer_pos := @pcm_buffer[1];
-        for ss := 0 to SSLIMIT-1 do begin
-          sb := 0;
-          sb18 := 0;
-          while (sb18 < 576) do begin
-            FFilter2.InputSample(FOut_1D[sb18 + ss], sb);
-            inc(sb18, 18);
-            inc(sb);
-          end;
-
-          FFilter2.CalculatePCMSamples(pcm_buffer_pos);
-          pcm_buffer_pos += 64;
-        end;
       end;
   end;
 
@@ -415,8 +400,8 @@ end;
 destructor TLayerIII_Decoder.Destroy;
 begin
   FreeAndNil(FBR);
-  FFilter1.Free;
-  FFilter2.Free;
+  FFilter[0].Free;
+  FFilter[1].Free;
 
   inherited Destroy;
 end;
@@ -443,7 +428,7 @@ var sfb, window: Integer;
 begin
   gr_info := @FSideInfo.ch[ch].gr[gr];
   scale_comp := gr_info.scalefac_compress;
-  length0 := slen[0, scale_comp];
+  length0 := slen[0, scale_comp];     //length0/1 can be 0 bits (initial info frame), skip reading ScaleFactors in that case
   length1 := slen[1, scale_comp];
 
   if ((gr_info.window_switching_flag <> 0) and (gr_info.block_type = 2)) then begin 
@@ -548,7 +533,7 @@ end;
 
 // Mono   : 136 bits (= 17 bytes)
 // Stereo : 256 bits (= 32 bytes)
-function TLayerIII_Decoder.GetSideInfo: Boolean;
+procedure TLayerIII_Decoder.GetSideInfo;
 var
   ch, gr: Cardinal;
   gr_info: TGrInfo;
@@ -581,22 +566,18 @@ begin
               gr_info.block_type := FStream.GetBits(2);
               gr_info.mixed_block_flag := FStream.GetBits(1);
 
-              gr_info.table_select[0] := FStream.GetBits(5);
+              gr_info.table_select[0] := FStream.GetBits(5);  //region 0,1
               gr_info.table_select[1] := FStream.GetBits(5);
 
-              gr_info.subblock_gain[0] := FStream.GetBits(3);
+              gr_info.subblock_gain[0] := FStream.GetBits(3);  //window 0..2
               gr_info.subblock_gain[1] := FStream.GetBits(3);
               gr_info.subblock_gain[2] := FStream.GetBits(3);
 
               // Set region_count parameters since they are implicit in this case.
-              if (gr_info.block_type = 0) then begin
-                  // Side info bad: block_type == 0 in split block
-                  Result := False;
-                  exit;
-              end else if (gr_info.block_type = 2) and (gr_info.mixed_block_flag = 0) then
-                  gr_info.region0_count := 8
-              else
-                  gr_info.region0_count := 7;
+              //if (gr_info.block_type = 0) then error : Side info bad: block_type == 0 in split block
+              gr_info.region0_count := 7;
+              if (gr_info.block_type = 2) and (gr_info.mixed_block_flag = 0) then
+                  gr_info.region0_count := 8;
 
               gr_info.region1_count := 20 - gr_info.region0_count;
           end else begin
@@ -614,8 +595,6 @@ begin
           FSideInfo.ch[ch].gr[gr] := gr_info;
       end;
   end;
-
-  Result := True;
 end;
 
 procedure TLayerIII_Decoder.HuffmanDecode(ch: Cardinal; gr: Cardinal);
@@ -627,29 +606,33 @@ var i: Cardinal;
     region2Start: Cardinal;
     index: Integer;
     h: PHuffCodeTab;
+    gr_info: TGrInfo;
 begin
-  part2_3_end := FPart2Start + FSideInfo.ch[ch].gr[gr].part2_3_length;
+  FillByte(FInputSamples, sizeof(FInputSamples), 0);
+  gr_info := FSideInfo.ch[ch].gr[gr];
+
+  part2_3_end := FPart2Start + gr_info.part2_3_length;
 
   // Find region boundary for short block case
-  if ((FSideInfo.ch[ch].gr[gr].window_switching_flag <> 0) and (FSideInfo.ch[ch].gr[gr].block_type = 2)) then begin
+  if ((gr_info.window_switching_flag <> 0) and (gr_info.block_type = 2)) then begin
     // Region2.
     region1Start := 36;   // sfb[9/3]*3=36
     region2Start := 576;  // No Region2 for short block case
   end else begin  // Find region boundary for long block case
-    region1Start := sfBandIndex[FSFreq].l[FSideInfo.ch[ch].gr[gr].region0_count + 1];
-    region2Start := sfBandIndex[FSFreq].l[FSideInfo.ch[ch].gr[gr].region0_count + FSideInfo.ch[ch].gr[gr].region1_count + 2];  // MI
+    region1Start := sfBandIndex[FSFreq].l[gr_info.region0_count + 1];
+    region2Start := sfBandIndex[FSFreq].l[gr_info.region0_count + gr_info.region1_count + 2];  // MI
   end;
 
   index := 0;
   // Read bigvalues area
   i := 0;
-  while (i < (FSideInfo.ch[ch].gr[gr].big_values shl 1)) do begin
+  while (i < (gr_info.big_values shl 1)) do begin
     if (i < region1Start) then
-      h := @g_hufftables[FSideInfo.ch[ch].gr[gr].table_select[0]]
+      h := @g_hufftables[gr_info.table_select[0]]
     else if (i < region2Start) then
-      h := @g_hufftables[FSideInfo.ch[ch].gr[gr].table_select[1]]
+      h := @g_hufftables[gr_info.table_select[1]]
     else
-      h := @g_hufftables[FSideInfo.ch[ch].gr[gr].table_select[2]];
+      h := @g_hufftables[gr_info.table_select[2]];
 
     HuffmanDecoder(h, x, y, v, w, FBR);
 
@@ -661,7 +644,7 @@ begin
   end;
 
   // Read count1 area
-  h := @g_hufftables[FSideInfo.ch[ch].gr[gr].count1table_select + 32];
+  h := @g_hufftables[gr_info.count1table_select + 32];
   num_bits := FBR.bitPosition;
 
   while ((num_bits < part2_3_end) and (index < 576)) do begin
@@ -692,12 +675,6 @@ begin
     FNonZero[ch] := index
   else
     FNonZero[ch] := 576;
-
-  // may not be necessary
-  while (index < 576) do begin
-    FInputSamples[index] := 0;
-    inc(index);
-  end;
 end;
 
 procedure TLayerIII_Decoder.Hybrid(ch: Cardinal; gr: Cardinal);
