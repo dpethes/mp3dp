@@ -278,12 +278,13 @@ begin
     exit;
   end;
 
-  { not useful until whole frame data is checked
   if (FProtectionBit = 0) then begin
+      FChecksum := Stream.GetBits(16);
+      { not useful until whole frame data is checked
       FCRC.Init();
       FCRC.AddBits(HeaderString, 16);  //16bits of header starting from bitrate index
+      }
   end;
-  }
 
   Result := True;
 end;
