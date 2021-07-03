@@ -96,6 +96,7 @@ type
     FSFreq: Cardinal;
 
     procedure DecodeGranule(gr: integer);
+    procedure FrequencyInversion();
     procedure GetSideInfo;
     procedure GetScaleFactors(ch: Cardinal; gr: Cardinal);
     procedure HuffmanDecode(ch: Cardinal; gr: Cardinal);
@@ -264,17 +265,7 @@ begin
       Reorder(@FLR[ch], ch, gr);
       Antialias(ch, gr);
       Hybrid(ch, gr);
-
-      sb18 := 18;
-      while (sb18 < 576) do begin  // Frequency inversion
-        ss := 1;
-        while (ss < SSLIMIT) do begin
-          FOut_1D[sb18 + ss] := -FOut_1D[sb18 + ss];
-          inc(ss, 2);
-        end;
-
-        inc(sb18, 36);
-      end;
+      FrequencyInversion();
 
       // Polyphase synthesis
       pcm_buffer_pos := @pcm_buffer[ch];
@@ -300,6 +291,25 @@ begin
 
   //both channels are now decoded and interleaved in pcm_buffer
   FBuffer.WriteBuffer(pcm_buffer, GRANULE_SAMPLES * 2 {channels} * 2 {sample size});
+end;
+
+{ In order to compensate for frequency inversions in the synthesis polyphase filterbank
+  every odd time sample of every odd subband is multiplied with -1 ()
+}
+procedure TLayerIII_Decoder.FrequencyInversion();
+var
+  sb18, ss: integer;
+begin
+  sb18 := 18;
+  while (sb18 < 576) do begin
+    ss := 1;
+    while (ss < SSLIMIT) do begin
+      FOut_1D[sb18 + ss] := -FOut_1D[sb18 + ss];
+      inc(ss, 2);
+    end;
+
+    inc(sb18, 36);
+  end;
 end;
 
 procedure TLayerIII_Decoder.DequantizeSample(var xr: TSArray; ch: Cardinal; gr: Cardinal);
