@@ -42,7 +42,6 @@ type
     big_values: word;
     global_gain: byte;
     scalefac_compress: byte;
-    window_switching_flag: byte;  //blocksplit flag
     block_type: byte;
     mixed_block_flag: byte;  //switch_point
     table_select: array[0..2] of byte;
@@ -52,6 +51,7 @@ type
     preflag: byte;
     scalefac_scale: byte;      //0 or 1
     count1table_select: byte;
+    window_switching_flag: byte;  //blocksplit flag
   end;
 
   TSideInfo = record
@@ -140,7 +140,7 @@ var
 begin
   sb18lim := 558;
   gr_info := @FSideInfo.ch[ch].gr[gr];
-  if (gr_info.window_switching_flag <> 0) and (gr_info.block_type = SHORT_BLOCK) then begin
+  if (gr_info.block_type = SHORT_BLOCK) then begin
       if (gr_info.mixed_block_flag = 0) then
           exit
       else
@@ -331,7 +331,7 @@ begin
   FillByte(xr1d^, sizeof(TSArray), 0);
 
   // choose correct scalefactor band per block type, initalize boundary
-  if (gr_info.window_switching_flag <> 0) and (gr_info.block_type = SHORT_BLOCK) then begin
+  if (gr_info.block_type = SHORT_BLOCK) then begin
     if (gr_info.mixed_block_flag <> 0) then
       next_cb_boundary := sfBandIndex[FSFreq].l[1]  // LONG blocks: 0,1,3
     else begin
@@ -356,7 +356,7 @@ begin
   // apply formula per block type
   for j := 0 to FNonZero[ch]-1 do begin
     if (index = next_cb_boundary) then begin  // Adjust critical band boundary
-      if (gr_info.window_switching_flag <> 0) and (gr_info.block_type = SHORT_BLOCK) then begin
+      if (gr_info.block_type = SHORT_BLOCK) then begin
         if (gr_info.mixed_block_flag <> 0) then begin
           if (index = sfBandIndex[FSFreq].l[8]) then begin
             next_cb_boundary := sfBandIndex[FSFreq].s[4];
@@ -391,7 +391,7 @@ begin
     end;
 
     // Do long/short dependent scaling operations
-    if ((gr_info.window_switching_flag <> 0) and (gr_info.block_type = SHORT_BLOCK))
+    if (gr_info.block_type = SHORT_BLOCK)
       and ((gr_info.mixed_block_flag = 0) or ((gr_info.mixed_block_flag <> 0) and (j >= 36))) then begin
         // xr[sb][ss] *= pow(2.0, ((-2.0 * gr_info->subblock_gain[t_index]) -(0.5 * (1.0 + gr_info->scalefac_scale) * scalefac[ch].s[t_index][cb])));
         t_index := (index - cb_begin) div cb_width;
@@ -462,7 +462,7 @@ begin
       short[2, 12] := 0;
   end;
 
-  if ((gr_info.window_switching_flag <> 0) and (gr_info.block_type = SHORT_BLOCK)) then begin
+  if (gr_info.block_type = SHORT_BLOCK) then begin
       with FScaleFactors[ch] do begin
           if (gr_info.mixed_block_flag <> 0) then begin  // MIXED
               for sfb := 0 to 7 do
@@ -592,7 +592,7 @@ begin
   part2_3_end := FPart2Start + gr_info.part2_3_length;
 
   // Find region boundaries
-  if ((gr_info.window_switching_flag <> 0) and (gr_info.block_type = SHORT_BLOCK)) then begin
+  if (gr_info.block_type = SHORT_BLOCK) then begin
     region1Start := 36;   // sfb[9/3]*3=36
     region2Start := 576;  // No Region2 for short block case
   end else begin
@@ -669,7 +669,7 @@ begin
 
   sb18 := 0;
   while (sb18 < 576) do begin
-    if (gr_info.window_switching_flag <> 0) and (gr_info.mixed_block_flag <> 0) and (sb18 < 36) then
+    if (gr_info.block_type = SHORT_BLOCK) and (gr_info.mixed_block_flag <> 0) and (sb18 < 36) then
       block_type := 0
     else
       block_type := gr_info.block_type;
@@ -731,7 +731,7 @@ var gr_info: PGRInfo;
 begin
   xr1d := @xr[0, 0];
   gr_info := @FSideInfo.ch[ch].gr[gr];
-  if (gr_info.window_switching_flag <> 0) and (gr_info.block_type = SHORT_BLOCK) then begin
+  if (gr_info.block_type = SHORT_BLOCK) then begin
     FillByte(FOut_1D, sizeof(FOut_1D), 0);
       
     if (gr_info.mixed_block_flag <> 0) then begin
