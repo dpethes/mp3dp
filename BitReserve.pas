@@ -122,10 +122,7 @@ end;
 // read N bits from the bit stream
 function TBitReserve.hgetbits(n: Cardinal): Cardinal;
 begin
-  if n = 0 then begin
-      result := 0;
-      exit;
-  end;
+  Assert(n > 0, 'zero bits to read');
   result := bs.Read(n);
 end;
 

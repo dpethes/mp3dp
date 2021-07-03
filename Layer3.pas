@@ -63,10 +63,12 @@ type
     end;
   end;
 
-  TScaleFactors = array[0..1] of record  //channel 0/1
-    long: array[0..22] of byte;
-    short: array[0..2, 0..12] of byte;  // [window][cb]
+  TScaleFactorsChannel = record
+      long: array[0..22] of byte;
+      short: array[0..2, 0..12] of byte;  // [window][cb]
   end;
+
+  TScaleFactors = array[0..1] of TScaleFactorsChannel;  //channel 0/1
 
   { TLayerIII_Decoder }
 
@@ -432,113 +434,76 @@ begin
   end;
 end;
 
-
+{$OPTIMIZATION NOLOOPUNROLL}
 procedure TLayerIII_Decoder.GetScaleFactors(ch: Cardinal; gr: Cardinal);
+
+  function getBits(n: integer): byte;
+  begin
+    if n = 0 then
+        result := 0
+    else
+        result := FBR.hgetbits(n);
+  end;
+
 var sfb, window: Integer;
     gr_info: PGRInfo;
-    scale_comp, length0, length1: Integer;
+    length0, length1: Integer;
 begin
   gr_info := @FSideInfo.ch[ch].gr[gr];
-  scale_comp := gr_info.scalefac_compress;
-  length0 := slen[0, scale_comp];     //length0/1 can be 0 bits (initial info frame), skip reading ScaleFactors in that case
-  length1 := slen[1, scale_comp];
+  length0 := slen[0, gr_info.scalefac_compress];  //length0/1 can be 0 bits, skip reading ScaleFactors in that case
+  length1 := slen[1, gr_info.scalefac_compress];
 
-  if ((gr_info.window_switching_flag <> 0) and (gr_info.block_type = SHORT_BLOCK)) then begin 
-      if (gr_info.mixed_block_flag <> 0) then begin  // MIXED
-          for sfb := 0 to 7 do
-            FScaleFactors[ch].long[sfb] := FBR.hgetbits(slen[0, gr_info.scalefac_compress]);
-          for sfb := 3 to 5 do
-            for window := 0 to 2 do
-              FScaleFactors[ch].short[window, sfb] := FBR.hgetbits(slen[0, gr_info.scalefac_compress]);
+  //these are always zero for layer 3 (cb_limit = 21, cb_limit_short = 12)
+  with FScaleFactors[ch] do begin
+      long[21] := 0;
+      long[22] := 0;
+      short[0, 12] := 0;
+      short[1, 12] := 0;
+      short[2, 12] := 0;
+  end;
+
+  if ((gr_info.window_switching_flag <> 0) and (gr_info.block_type = SHORT_BLOCK)) then begin
+      with FScaleFactors[ch] do begin
+          if (gr_info.mixed_block_flag <> 0) then begin  // MIXED
+              for sfb := 0 to 7 do
+                  long[sfb] := getBits(length0);
+              for sfb := 3 to 5 do
+                for window := 0 to 2 do
+                  short[window, sfb] := getBits(length0);
+          end else begin  // SHORT
+              for sfb := 0 to 5 do
+                for window := 0 to 2 do
+                  short[window, sfb] := getBits(length0);
+          end;
           for sfb := 6 to 11 do
             for window := 0 to 2 do
-              FScaleFactors[ch].short[window, sfb] := FBR.hgetbits(slen[1, gr_info.scalefac_compress]);
-          sfb := 12;
-          for window := 0 to 2 do
-            FScaleFactors[ch].short[window, sfb] := 0;
-      end else begin  // SHORT
-          with FScaleFactors[ch] do begin
-              short[0, 0]  := FBR.hgetbits(length0);
-              short[1, 0]  := FBR.hgetbits(length0);
-              short[2, 0]  := FBR.hgetbits(length0);
-              short[0, 1]  := FBR.hgetbits(length0);
-              short[1, 1]  := FBR.hgetbits(length0);
-              short[2, 1]  := FBR.hgetbits(length0);
-              short[0, 2]  := FBR.hgetbits(length0);
-              short[1, 2]  := FBR.hgetbits(length0);
-              short[2, 2]  := FBR.hgetbits(length0);
-              short[0, 3]  := FBR.hgetbits(length0);
-              short[1, 3]  := FBR.hgetbits(length0);
-              short[2, 3]  := FBR.hgetbits(length0);
-              short[0, 4]  := FBR.hgetbits(length0);
-              short[1, 4]  := FBR.hgetbits(length0);
-              short[2, 4]  := FBR.hgetbits(length0);
-              short[0, 5]  := FBR.hgetbits(length0);
-              short[1, 5]  := FBR.hgetbits(length0);
-              short[2, 5]  := FBR.hgetbits(length0);
-              short[0, 6]  := FBR.hgetbits(length1);
-              short[1, 6]  := FBR.hgetbits(length1);
-              short[2, 6]  := FBR.hgetbits(length1);
-              short[0, 7]  := FBR.hgetbits(length1);
-              short[1, 7]  := FBR.hgetbits(length1);
-              short[2, 7]  := FBR.hgetbits(length1);
-              short[0, 8]  := FBR.hgetbits(length1);
-              short[1, 8]  := FBR.hgetbits(length1);
-              short[2, 8]  := FBR.hgetbits(length1);
-              short[0, 9]  := FBR.hgetbits(length1);
-              short[1, 9]  := FBR.hgetbits(length1);
-              short[2, 9]  := FBR.hgetbits(length1);
-              short[0, 10] := FBR.hgetbits(length1);
-              short[1, 10] := FBR.hgetbits(length1);
-              short[2, 10] := FBR.hgetbits(length1);
-              short[0, 11] := FBR.hgetbits(length1);
-              short[1, 11] := FBR.hgetbits(length1);
-              short[2, 11] := FBR.hgetbits(length1);
-              short[0, 12] := 0;
-              short[1, 12] := 0;
-              short[2, 12] := 0;
-          end;
+              short[window, sfb] := getBits(length1);
       end;
   end else begin  // LONG types 0,1,3
       with FScaleFactors[ch] do begin
           if ((FSideInfo.ch[ch].scfsi[0] = 0) or (gr = 0)) then begin
-              long[0]  := FBR.hgetbits(length0);
-              long[1]  := FBR.hgetbits(length0);
-              long[2]  := FBR.hgetbits(length0);
-              long[3]  := FBR.hgetbits(length0);
-              long[4]  := FBR.hgetbits(length0);
-              long[5]  := FBR.hgetbits(length0);
+              for sfb := 0 to 5 do
+                  long[sfb] := getBits(length0);
           end;
 
           if ((FSideInfo.ch[ch].scfsi[1] = 0) or (gr = 0)) then begin
-              long[6]  := FBR.hgetbits(length0);
-              long[7]  := FBR.hgetbits(length0);
-              long[8]  := FBR.hgetbits(length0);
-              long[9]  := FBR.hgetbits(length0);
-              long[10] := FBR.hgetbits(length0);
+              for sfb := 6 to 10 do
+                  long[sfb] := getBits(length0);
           end;
 
           if ((FSideInfo.ch[ch].scfsi[2] = 0) or (gr = 0)) then begin
-              long[11] := FBR.hgetbits(length1);
-              long[12] := FBR.hgetbits(length1);
-              long[13] := FBR.hgetbits(length1);
-              long[14] := FBR.hgetbits(length1);
-              long[15] := FBR.hgetbits(length1);
+              for sfb := 11 to 15 do
+                  long[sfb] := getBits(length1);
           end;
 
           if ((FSideInfo.ch[ch].scfsi[3] = 0) or (gr = 0)) then begin
-              long[16] := FBR.hgetbits(length1);
-              long[17] := FBR.hgetbits(length1);
-              long[18] := FBR.hgetbits(length1);
-              long[19] := FBR.hgetbits(length1);
-              long[20] := FBR.hgetbits(length1);
+              for sfb := 16 to 20 do
+                  long[sfb] := getBits(length1);
           end;
-
-          long[21] := 0;
-          long[22] := 0;
       end;
   end;
 end;
+{$OPTIMIZATION DEFAULT}
 
 // Reads the side info from the stream, assuming the entire
 // frame has been read already.
