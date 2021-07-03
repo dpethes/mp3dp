@@ -246,6 +246,7 @@ var
   ch, ss, sb, sb18: Cardinal;
   pcm_buffer_pos: PInt16;
   pcm_buffer: array[0..GRANULE_SAMPLES * 2 - 1] of int16;
+  i: Integer;
 begin
   for ch := 0 to FChannels-1 do begin
       FPart2Start := FBR.bitPosition;
@@ -290,6 +291,12 @@ begin
           FFilter[ch].CalculatePCMSamples(pcm_buffer_pos);
           pcm_buffer_pos += 64;
       end;
+  end;
+
+  //copy first channel samples into second channel for stereo output of mono stream
+  if FChannels = 1 then begin
+      for i := 0 to GRANULE_SAMPLES - 1 do
+          pcm_buffer[i * 2 + 1] := pcm_buffer[i * 2];
   end;
 
   //both channels are now decoded and interleaved in pcm_buffer
