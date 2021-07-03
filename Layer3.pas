@@ -25,7 +25,7 @@ unit Layer3;
 interface
 uses
   classes,
-  Shared, BitReserve, BitStream, Header, SynthFilter;
+  L3Tables, Shared, BitReserve, BitStream, Header, SynthFilter, Huffman, InvMDT;
 
 const
   // Size of the table of whole numbers raised to 4/3 power.
@@ -116,8 +116,6 @@ type
   end;
 
 implementation
-uses
-  SysUtils, Huffman, Math, InvMDT, L3Tables;
 
 { TLayerIII_Decoder }
 
@@ -413,7 +411,7 @@ end;
 
 destructor TLayerIII_Decoder.Destroy;
 begin
-  FreeAndNil(FBR);
+  FBR.Free;
   FFilter[0].Free;
   FFilter[1].Free;
 
@@ -580,7 +578,7 @@ begin
               gr_info.block_type := FStream.GetBits(2);
               gr_info.mixed_block_flag := FStream.GetBits(1);
 
-              gr_info.table_select[0] := FStream.GetBits(5);  //region 0,1
+              gr_info.table_select[0] := FStream.GetBits(5);  //region 0,1 only; region 2 unused in short block
               gr_info.table_select[1] := FStream.GetBits(5);
 
               gr_info.subblock_gain[0] := FStream.GetBits(3);  //window 0..2
@@ -596,6 +594,7 @@ begin
               gr_info.region1_count := 20 - gr_info.region0_count;
           end else begin
               gr_info.block_type := 0;
+              gr_info.mixed_block_flag := 0;
               gr_info.table_select[0] := FStream.GetBits(5);
               gr_info.table_select[1] := FStream.GetBits(5);
               gr_info.table_select[2] := FStream.GetBits(5);
@@ -627,14 +626,13 @@ begin
 
   part2_3_end := FPart2Start + gr_info.part2_3_length;
 
-  // Find region boundary for short block case
+  // Find region boundaries
   if ((gr_info.window_switching_flag <> 0) and (gr_info.block_type = SHORT_BLOCK)) then begin
-    // Region2.
     region1Start := 36;   // sfb[9/3]*3=36
     region2Start := 576;  // No Region2 for short block case
-  end else begin  // Find region boundary for long block case
+  end else begin
     region1Start := sfBandIndex[FSFreq].l[gr_info.region0_count + 1];
-    region2Start := sfBandIndex[FSFreq].l[gr_info.region0_count + gr_info.region1_count + 2];  // MI
+    region2Start := sfBandIndex[FSFreq].l[gr_info.region0_count + gr_info.region1_count + 2];
   end;
 
   index := 0;

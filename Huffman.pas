@@ -24,7 +24,7 @@ unit Huffman;
 
 interface
 uses
-  SysUtils, BitReserve;
+  BitReserve;
 
 type
   PHuffBits = ^THuffBits;

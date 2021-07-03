@@ -24,7 +24,7 @@ unit InvMDT;
 
 interface
 uses
-  SysUtils, Shared;
+  Shared;
 
 procedure InvMDCT(input: PSingleArray; output: PSingleArray; block_type: Integer);
 
@@ -90,7 +90,7 @@ var tmp: array[0..17] of Single;
     tmp0o, tmp1o, tmp2o, tmp3o, tmp4o, tmp0_o, tmp1_o, tmp2_o, tmp3_o: Single;
     i0, i0p12, i6_, e, o: Single;
 begin
-  if (block_type = 2) then begin
+  if (block_type = SHORT_BLOCK) then begin
     for i := 0 to 35 do
         output[i] := 0;
 

@@ -27,8 +27,8 @@ uses
   BitStream, L3Tables;
 
 type
-  TVersion         = (MPEG2_LSF, MPEG1);
-  TMode            = (Stereo, JointStereo, DualChannel, SingleChannel);
+  TVersion = (MPEG2_LSF, MPEG1);
+  TMode    = (Stereo, JointStereo, DualChannel, SingleChannel);
 
   TCRC16 = object
   private
@@ -53,8 +53,6 @@ type
     FSampleFrequency: TSampleFrequency;
     FNumberOfSubbands: Cardinal;
     FIntensityStereoBound: Cardinal;
-    FCopyright: Boolean;
-    FOriginal: Boolean;
     FInitialSync: Boolean;
     //FCRC: TCRC16;
     FChecksum: Cardinal;
@@ -73,8 +71,6 @@ type
     property Frequency: Cardinal read GetFrequency;
     property Mode: TMode read FMode;
     property Checksums: Boolean read GetChecksums;
-    property Copyright: Boolean read FCopyright;
-    property Original: Boolean read FOriginal;
     property Padding: Boolean read GetPadding;
     property Slots: Cardinal read FNumSlots;
     property ModeExtension: Cardinal read FModeExtension;
@@ -93,13 +89,6 @@ type
     function Bitrate: Cardinal;
 
     function CalculateFrameSize: Cardinal;
-
-    // Scrolling stuff
-    function MaxNumberOfFrames(Stream: TBitStream): Integer;
-    function MinNumberOfFrames(Stream: TBitStream): Integer;
-
-    function MSPerFrame: Single;  // milliseconds per frame, for time display
-    function TotalMS(Stream: TBitStream): Single;
   end;
 
 implementation
@@ -172,26 +161,6 @@ begin
   Result := (FPaddingBit <> 0);
 end;
 
-// Returns the maximum number of frames in the stream
-function THeader.MaxNumberOfFrames(Stream: TBitStream): Integer;
-begin
-  Result := Stream.FileSize div (FFrameSize + 4 - FPaddingBit);
-end;
-
-// Returns the minimum number of frames in the stream
-function THeader.MinNumberOfFrames(Stream: TBitStream): Integer;
-begin
-  Result := Stream.FileSize div (FFrameSize + 5 - FPaddingBit);
-end;
-
-const
-  MSPerFrameArray: array[TSampleFrequency] of Single = (26.12245, 24.0, 36.0, 0);
-    
-function THeader.MSPerFrame: Single;
-begin
-  Result := MSperFrameArray[FSampleFrequency];
-end;
-
 function THeader.ReadHeader(Stream: TBitStream): Boolean;
 var
   HeaderString, ChannelBitrate: integer;
@@ -237,9 +206,6 @@ begin
     FIntensityStereoBound := (FModeExtension shl 2) + 4
   else
     FIntensityStereoBound := 0;  // should never be used
-
-  FCopyright := ((HeaderString shr 3) and 1 <> 0);
-  FOriginal := ((HeaderString shr 2) and 1 <> 0);
 
   // calculate number of subbands:
   if (FLayer = 1) then
@@ -287,11 +253,6 @@ begin
   end;
 
   Result := True;
-end;
-
-function THeader.TotalMS(Stream: TBitStream): Single;
-begin
-  Result := MaxNumberOfFrames(Stream) * MSPerFrame;
 end;
 
 
