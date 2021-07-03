@@ -41,6 +41,7 @@ constructor TMP3Stream.Create;
 begin
   InitPower43Table;
   InitReorderTable;
+  InitGlobalGainTable;
 end;
 
 procedure TMP3Stream.DecodeFile(input: TStream; Output: TStream);

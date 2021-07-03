@@ -341,8 +341,8 @@ begin
   end else
     next_cb_boundary := sfBandIndex[FSFreq].l[1];  // LONG blocks: 0,1,3
 
-  // Compute overall (global) scaling.
-  g_gain := Power(2.0 , (0.25 * (gr_info.global_gain - 210.0)));
+  // scale by global gain first
+  g_gain := L3_global_gain_table[gr_info.global_gain];  //Power(2.0 , (0.25 * (gain - 210.0)));
 
   for j := 0 to FNonZero[ch]-1 do begin
     if (FInputSamples[j] = 0) then

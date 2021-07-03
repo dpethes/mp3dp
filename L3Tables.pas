@@ -72,9 +72,11 @@ var
   L3_pow_43: array[0..8206] of Single;
 
   L3_short_reorder_table: array[0..2, 0..575] of uint16;
+  L3_global_gain_table: array[byte] of single;
 
 procedure InitReorderTable;
 procedure InitPower43Table;
+procedure InitGlobalGainTable;
 
 implementation
 
@@ -108,6 +110,14 @@ begin
   for i := 1 to High(L3_pow_43) do begin
       L3_pow_43[i] := Power(i, 4/3);
   end;
+end;
+
+procedure InitGlobalGainTable;
+var
+  i: integer;
+begin
+  for i := 0 to 255 do
+      L3_global_gain_table[i] := Power(2.0 , (0.25 * (i - 210.0)));
 end;
 
 end.
