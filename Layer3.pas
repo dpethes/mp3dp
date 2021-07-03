@@ -769,8 +769,7 @@ begin
   xr1d := @xr[0, 0];
   gr_info := @FSideInfo.ch[ch].gr[gr];
   if (gr_info.window_switching_flag <> 0) and (gr_info.block_type = 2) then begin
-    for index := 0 to 576-1 do
-      FOut_1D[index] := 0.0;
+    FillByte(FOut_1D, sizeof(FOut_1D), 0);
       
     if (gr_info.mixed_block_flag <> 0) then begin
       // NO REORDER FOR LOW 2 SUBBANDS
@@ -802,9 +801,9 @@ begin
       for index := 0 to 576-1 do
         FOut_1D[index] := xr1d[L3_short_reorder_table[FSFreq][index]];
     end;
-  end else begin  // long blocks
-    for index := 0 to 576-1 do
-      FOut_1D[index] := xr1d[index];
+  end else begin
+      // no reorder for long blocks
+      move(xr1d^, FOut_1D, sizeof(FOut_1D));
   end;
 end;
 
