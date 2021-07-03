@@ -97,6 +97,10 @@ type
     FLastChannel: Cardinal;
     FSFreq: Cardinal;
 
+    _skipped_frames: integer;
+    FGrInfoError: boolean;
+    FTryDecodeBrokenFrames: boolean;  //might fail; useful for testing streams with errors
+
     procedure DecodeGranule(gr: integer);
     procedure FrequencyInversion();
     procedure GetSideInfo;
@@ -219,24 +223,27 @@ begin
   FNonZero[1] := 576;
 
   FBR := TBitReserve.Create;
+  _skipped_frames := 0;
+  FTryDecodeBrokenFrames := false;
 end;
 
 procedure TLayerIII_Decoder.DecodeSingleFrame;
 var
-  nSlots: Cardinal;
+  has_error: Boolean;
 begin
   Assert(FHeader.Version = MPEG1, 'invalid format version');
 
   GetSideInfo;
-  //we can check if SideInfo is valid, but probably want to decode anyway
-
-  //handle bitreservoir
   FBR.NewFrame(FSideInfo.main_data_begin);
-  nSlots := FHeader.Slots;
-  FBR.InsertMainData(FStream.CurrentDataPointer, nslots);
+  FBR.InsertMainData(FStream.CurrentDataPointer, FHeader.Slots);
 
-  DecodeGranule(0);
-  DecodeGranule(1);
+  //most likely a SideInfo error: do not process this frame but keep main_data bytes, next frame might need it
+  has_error := FBR.InvalidDataBegin or FGrInfoError;
+  if not has_error or FTryDecodeBrokenFrames then begin
+      DecodeGranule(0);
+      DecodeGranule(1);
+  end else
+      _skipped_frames += 1;
 
   FBR.EndFrame();
 end;
@@ -517,6 +524,7 @@ var
 begin
   Assert(FHeader.Version = MPEG1, 'invalid format version');
 
+  FGrInfoError := false;
   FSideInfo.main_data_begin := FStream.GetBits(9);
   if (FChannels = 1) then
     FSideInfo.private_bits := FStream.GetBits(5)
@@ -536,11 +544,15 @@ begin
       for ch := 0 to FChannels-1 do begin
           gr_info.part2_3_length := FStream.GetBits(12);
           gr_info.big_values := FStream.GetBits(9);
+          if gr_info.big_values * 2 > GRANULE_SAMPLES then
+              FGrInfoError := true;
           gr_info.global_gain := FStream.GetBits(8);
           gr_info.scalefac_compress := FStream.GetBits(4);
           gr_info.window_switching_flag := FStream.GetBits(1);
-          if (gr_info.window_switching_flag <> 0) then begin
+          if gr_info.window_switching_flag <> 0 then begin
               gr_info.block_type := FStream.GetBits(2);
+              if gr_info.block_type = 0 then  // reserved
+                  FGrInfoError := true;
               gr_info.mixed_block_flag := FStream.GetBits(1);
 
               gr_info.table_select[0] := FStream.GetBits(5);  //region 0,1 only; region 2 unused in short block
@@ -551,7 +563,6 @@ begin
               gr_info.subblock_gain[2] := FStream.GetBits(3);
 
               // Set region_count parameters since they are implicit in this case.
-              //if (gr_info.block_type = 0) then error : Side info bad: block_type == 0 in split block
               gr_info.region0_count := 7;
               if (gr_info.block_type = SHORT_BLOCK) and (gr_info.mixed_block_flag = 0) then
                   gr_info.region0_count := 8;
@@ -583,6 +594,8 @@ var i: Cardinal;
     region1Start: Cardinal;
     region2Start: Cardinal;
     index, bits_to_skip: Integer;
+    big_values: uint32;
+    check_big_values_bitcount: boolean;
     h: PHuffCodeTab;
     gr_info: TGrInfo;
 begin
@@ -590,6 +603,7 @@ begin
   gr_info := FSideInfo.ch[ch].gr[gr];
 
   part2_3_end := FPart2Start + gr_info.part2_3_length;
+  check_big_values_bitcount := false;
 
   // Find region boundaries
   if (gr_info.block_type = SHORT_BLOCK) then begin
@@ -603,7 +617,12 @@ begin
   index := 0;
   // Read bigvalues area
   i := 0;
-  while (i < (gr_info.big_values shl 1)) do begin
+  big_values := gr_info.big_values * 2;
+  if big_values > GRANULE_SAMPLES then begin  //check against corrupted streams
+      big_values := GRANULE_SAMPLES;
+      check_big_values_bitcount := true;
+  end;
+  while i < big_values do begin
     if (i < region1Start) then
       h := @g_hufftables[gr_info.table_select[0]]
     else if (i < region2Start) then
@@ -618,13 +637,25 @@ begin
 
     inc(index, 2);
     inc(i, 2);
+
+    if check_big_values_bitcount then begin
+        num_bits := FBR.bitPosition;
+        //seems we read way too far already
+        if (num_bits > part2_3_end) then begin
+            bits_to_skip := num_bits - part2_3_end;
+            FBR.RewindBits(bits_to_skip);
+            dec(index, 2);
+            num_bits -= bits_to_skip;
+            break;
+        end;
+    end;
   end;
 
   // Read count1 area
   h := @g_hufftables[gr_info.count1table_select + 32];
   num_bits := FBR.bitPosition;
 
-  while ((num_bits < part2_3_end) and (index + 4 < 576)) do begin
+  while ((num_bits < part2_3_end) and (index + 4 < GRANULE_SAMPLES)) do begin
     HuffmanDecoder(h, x, y, v, w, FBR);
 
     FInputSamples[index] := v;
@@ -636,12 +667,12 @@ begin
     num_bits := FBR.bitPosition;
   end;
 
-  //seems we read way too far - error in bitstream?
+  //seems we read way too far - this happens quite often, wrong part2_3_length being written by encoder? Some decoder error?
   if (num_bits > part2_3_end) then begin
       bits_to_skip := num_bits - part2_3_end;
       FBR.RewindBits(bits_to_skip);
       dec(index, 4);
-      num_bits := FBR.bitPosition;
+      num_bits -= bits_to_skip;
   end;
 
   // Dismiss stuffing bits (test with si.bit)

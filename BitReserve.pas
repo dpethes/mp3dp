@@ -25,7 +25,7 @@ type
 
 
   public
-    function bitPosition: Cardinal;
+    InvalidDataBegin: boolean;
 
     constructor Create;
     destructor Destroy; override;
@@ -34,9 +34,9 @@ type
     procedure InsertMainData(src: pbyte; length: integer);
     procedure EndFrame();
 
+    function bitPosition: Cardinal;
     function hgetbits(n: Cardinal): Cardinal;
     function hget1bit: Cardinal;
-
     procedure RewindBits(n: Cardinal);
     procedure SkipBits(n: cardinal);
   end;
@@ -63,6 +63,7 @@ var
   bytes_to_discard: integer;
 begin
   Assert(main_data_begin < 512);
+  InvalidDataBegin := false;
 
   //remove padding - data from previous frame(s) which was unused and is now unreachable
   bytes_to_discard := _size - main_data_begin;
@@ -70,7 +71,8 @@ begin
       FlushBytes(bytes_to_discard);
 
   //can usually happen in splits, if the frame has main_data in previous frame which does not exist anymore
-  //TODO if (bytes_to_discard < 0) signal FSideInfo error, do not process this frame, just insert new bytes to stream
+  if (bytes_to_discard < 0) then
+      InvalidDataBegin := true;
 end;
 
 procedure TBitReserve.InsertMainData(src: pbyte; length: integer);
