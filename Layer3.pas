@@ -72,10 +72,10 @@ type
 
   TLayerIII_Decoder = class
   private
-    FRO: array[0..1] of TSArray;
-    FLR: array[0..1] of TSArray;
-    FInputSamples:  array[0..GRANULE_SAMPLES-1] of Int16;
-    FOut_1D: array[0..GRANULE_SAMPLES-1] of Single;
+    FInputSamples: array[0..GRANULE_SAMPLES-1] of Int16;  //huff decoded samples
+    FRO: array[0..1] of TSArray;                          //dequantized samples
+    FLR: array[0..1] of TSArray;                          //left/right samples
+    FOut_1D: array[0..GRANULE_SAMPLES-1] of Single;       //reordered samples of current channel
     FPrevBlock: array[0..1, 0..GRANULE_SAMPLES-1] of Single;
     FNonZero: array[0..1] of UInt16;
 
@@ -802,49 +802,33 @@ begin
 end;
 
 procedure TLayerIII_Decoder.Stereo();
-var sb, ss: Integer;
-    is_pos: array[0..575] of Cardinal;
-    mode_ext: Cardinal;
-    i: Integer;
-    ms_stereo, i_stereo: Boolean;
+var
+  sb, ss: Integer;
+  mode_ext: Cardinal;
+  ms_stereo, i_stereo: Boolean;
 begin
   if (FChannels = 1) then begin  // mono , bypass xr[0][][] to lr[0][][]
-    for sb := 0 to SBLIMIT-1 do begin
-      ss := 0;
-      while (ss < SSLIMIT) do begin
-        FLR[0][sb][ss]   := FRO[0][sb][ss];
-        FLR[0][sb][ss+1] := FRO[0][sb][ss+1];
-        FLR[0][sb][ss+2] := FRO[0][sb][ss+2];
-        inc(ss, 3);
-      end;
-    end;
-  end else begin
-    mode_ext := FHeader.ModeExtension;
-    ms_stereo := (FHeader.Mode = JointStereo) and (Mode_Ext and $2 <> 0);
-    i_stereo  := (FHeader.Mode = JointStereo) and (Mode_Ext and $1 <> 0);
+      Assert(sizeof(FRO[0]) = GRANULE_SAMPLES * 4);
+      move(FRO[0], FLR[0], sizeof(FRO[0]));
+      exit;
+  end;
 
-    // removed intensity stereo code due to lack of samples; lame doesn't support it
-    Assert(i_stereo = false, 'intensity stereo not supported atm');
+  mode_ext := FHeader.ModeExtension;
+  ms_stereo := (FHeader.Mode = JointStereo) and (Mode_Ext and $2 <> 0);
+  i_stereo  := (FHeader.Mode = JointStereo) and (Mode_Ext and $1 <> 0);
 
-    // initialization
-    for i := 0 to 576-1 do
-      is_pos[i] := 7;
+  // removed intensity stereo code due to lack of samples; lame doesn't support it
+  Assert(i_stereo = false, 'intensity stereo not supported atm');
 
-    i := 0;
-    for sb := 0 to SBLIMIT-1 do
-      for ss := 0 to SSLIMIT-1 do begin
-        if (is_pos[i] = 7) then begin
-          if (ms_stereo) then begin
-            FLR[0][sb][ss] := (FRO[0][sb][ss] + FRO[1][sb][ss]) * 0.707106781;
-            FLR[1][sb][ss] := (FRO[0][sb][ss] - FRO[1][sb][ss]) * 0.707106781;
-          end else begin
-            FLR[0][sb][ss] := FRO[0][sb][ss];
-            FLR[1][sb][ss] := FRO[1][sb][ss];
+  if (ms_stereo) then begin
+      for sb := 0 to SBLIMIT-1 do
+          for ss := 0 to SSLIMIT-1 do begin
+              FLR[0][sb][ss] := (FRO[0][sb][ss] + FRO[1][sb][ss]) * 0.707106781;
+              FLR[1][sb][ss] := (FRO[0][sb][ss] - FRO[1][sb][ss]) * 0.707106781;
           end;
-        end;
-
-        inc(i);
-      end;
+  end else begin
+      Assert(sizeof(FRO) = GRANULE_SAMPLES * 4 * 2);
+      move(FRO, FLR, sizeof(FRO));
   end;
 end;
 
