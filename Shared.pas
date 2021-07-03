@@ -23,9 +23,6 @@ unit Shared;
 
 interface
 
-uses
-  classes;
-
 const
   OBUFFERSIZE  = 2 * 1152;  // max. 2 * 1152 samples per frame
 
@@ -34,6 +31,7 @@ const
   GRANULE_SAMPLES = 576;  //32 subband blocks * 18 frequency lines
   FRAME_SAMPLES = 2 * GRANULE_SAMPLES;
 
+  SHORT_BLOCK = 2;
 
 type
   PSingleArray = ^TSingleArray;
