@@ -120,6 +120,8 @@ uses
 
 { TLayerIII_Decoder }
 
+// 31 alias-reduction operations between each pair of sub-bands
+// with 8 butterflies between each pair
 procedure TLayerIII_Decoder.Antialias(ch: Cardinal; gr: Cardinal);
 const
   cs: array[0..7] of Single = (
@@ -135,17 +137,14 @@ var
   bu, bd: Single;
   src_idx1, src_idx2: Integer;
 begin
+  sb18lim := 558;
   gr_info := @FSideInfo.ch[ch].gr[gr];
-
-  // 31 alias-reduction operations between each pair of sub-bands
-  // with 8 butterflies between each pair
-  if (gr_info.window_switching_flag <> 0) and (gr_info.block_type = 2) and (gr_info.mixed_block_flag = 0) then
-    exit;
-
-  if (gr_info.window_switching_flag <> 0) and (gr_info.mixed_block_flag <> 0) and (gr_info.block_type = 2) then
-    sb18lim := 18
-  else
-    sb18lim := 558;
+  if (gr_info.window_switching_flag <> 0) and (gr_info.block_type = 2) then begin
+      if (gr_info.mixed_block_flag = 0) then
+          exit
+      else
+          sb18lim := 18;
+  end;
 
   sb18 := 0;
   while (sb18 < sb18lim) do begin
